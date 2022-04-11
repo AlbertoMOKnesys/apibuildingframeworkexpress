@@ -1,13 +1,9 @@
-// require("dotenv").config();
-// const MongoWraper = require("mongoclienteasywrapper")(process.env.MONGO_URI);
-var MongoWraper;
 const { sizeObj } = require("./common");
 const ObjectId = require("mongodb").ObjectID;
 const fs = require("fs");
-// const { Assing } = require("./assing");
 const uploadfileDatos = require("./uploadFileData");
-const { ipServer } = require("../config/vars");
-const { ApiError, ApiErrorData } = require("../ApiError");
+// const { ipServer } = require("../config/vars");
+const { ApiError, ApiErrorData } = require("./ApiError");
 const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
 const Oculta = { oculta: { $ne: true } };
@@ -143,8 +139,12 @@ const GetGenericQueryPartial = (Query) => {
   return { $and: fullAndArray };
 };
 
-const list = async function (req, res) {
-  const collection = req.originalUrl.match(re)[0];
+const list = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
   console.log("collection", collection);
   const hasOrder =
     req.user.order !== undefined && req.user.order[collection] !== undefined
@@ -202,7 +202,7 @@ const list = async function (req, res) {
         page,
         limit,
         collection,
-        req.database
+        db
       );
 
       const acople = dbResponse.map((generic) => {
@@ -238,7 +238,7 @@ const list = async function (req, res) {
       const dbResponse = await MongoWraper.PopulateAuto(
         exampleQuerie,
         collection,
-        req.database
+        db
       );
 
       const acople = dbResponse.map((generic) => {
@@ -264,16 +264,21 @@ const list = async function (req, res) {
   }
 };
 
-const listOne = async function (req, res) {
-  // console.log(req.route.path);
+const listOne = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+
   // console.log(req.originalUrl);
-  const collection = req.originalUrl.match(re)[0];
+  // console.log(req.originalUrl);
+  //   const collection = req.originalUrl.match(re)[0];
 
   try {
     const dbResponse = await MongoWraper.ND_FindIDOnePopulated(
       req.params._id,
       collection,
-      req.database
+      db
     );
 
     const objResp = {
@@ -292,171 +297,205 @@ const listOne = async function (req, res) {
   }
 };
 
-const create =
-  (AsyncFunctionAfter, Databse, Collection) => async (req, res) => {
-    const collection = Collection ? Collection : req.route.path.match(re)[0];
-    const Db = Databse ? Databse : req.database;
+const create = (params) => async (req, res) => {
+  params = params ? params : {};
+  const {
+    Databse,
+    Collection,
+    PathDest,
+    PathTemp,
+    URL,
+    ApiErrorFailDb,
+    AsyncFunctionAfter,
+  } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
 
-    //codigo nuevo para asignar al momento de insertar
+  // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  // const Db = Databse ? Databse : req.database;
 
-    req.body = Object.keys(req.body).reduce((acum, property) => {
-      if (property.includes("_datetime")) {
-        return { ...acum, [property]: new Date(req.body[property]) };
-      } else {
-        return { ...acum, [property]: req.body[property] };
-      }
-    }, {});
-    const objToSave = { ...req.body, datetime: new Date() };
-    console.log(objToSave);
-    //Guadando asignaciones para que no se inserten junto con el body
-    let Asignaciones = req.body.hasOwnProperty("_Assign")
-      ? req.body._Assign
-      : [];
+  //codigo nuevo para asignar al momento de insertar
 
-    delete req.body._Assign;
+  req.body = Object.keys(req.body).reduce((acum, property) => {
+    if (property.includes("_datetime")) {
+      return { ...acum, [property]: new Date(req.body[property]) };
+    } else {
+      return { ...acum, [property]: req.body[property] };
+    }
+  }, {});
+  const objToSave = { ...req.body, datetime: new Date() };
+  console.log(objToSave);
+  //Guadando asignaciones para que no se inserten junto con el body
+  let Asignaciones = req.body.hasOwnProperty("_Assign") ? req.body._Assign : [];
 
-    //Insertando en DB\
-    console.log(
-      "llego hasta acaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  delete req.body._Assign;
+
+  //Insertando en DB\
+  console.log("llego hasta acaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  console.log(req.body);
+  let dbResponse;
+  try {
+    dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, db);
+  } catch (err) {
+    console.log(err);
+
+    throw new ApiErrorData(
+      400,
+      ApiErrorFailDb ? ApiErrorFailDb : "db error",
+      err
     );
-    console.log(req.body);
+  }
 
-    const dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, Db);
-    const dbResponseFind = await MongoWraper.FindOne(
+  //codigo nuevo para asignar al momento de insertar
+  //agregando id de lo que acabamos de insertar a la asignacion
+  Asignaciones = Asignaciones.map((e) => {
+    return { ...e, [collection]: [dbResponse.insertedId] };
+  });
+  //
+
+  const PromisesAssign = Asignaciones.map((e) => Assing(e, Db, Db));
+
+  await Promise.all(PromisesAssign);
+
+  //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
+  if (req.files) {
+    // const dirDestino = `${__basedir}/files/${Db}/${collection}/${dbResponse.insertedId}/`;
+    const dirDestino = `${PathDest}/${db}/${collection}/${dbResponse.insertedId}/`;
+    if (!fs.existsSync(dirDestino)) {
+      fs.mkdirSync(dirDestino, { recursive: true });
+    }
+    const fotofile = req.files.file[0];
+    const pathDestino = dirDestino + fotofile.filename;
+    fs.renameSync(fotofile.path, pathDestino);
+    //actualizando el directorio al que se movio
+
+    // const foto = `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
+    const foto = `${URL}/${db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
+    await MongoWraper.UpdateMongoBy_id(
       dbResponse.insertedId,
+      {
+        foto: foto,
+        fotopath: pathDestino,
+      },
       collection,
-      Db
+      db
     );
 
-    //codigo nuevo para asignar al momento de insertar
-    //agregando id de lo que acabamos de insertar a la asignacion
-    Asignaciones = Asignaciones.map((e) => {
-      return { ...e, [collection]: [dbResponse.insertedId] };
-    });
-    //
+    req.body.foto = foto;
+    req.body.fotopath = pathDestino;
+  }
 
-    const PromisesAssign = Asignaciones.map((e) => Assing(e, Db, Db));
+  const dbResponseFind = await MongoWraper.FindOne(
+    dbResponse.insertedId,
+    collection,
+    db
+  );
 
-    await Promise.all(PromisesAssign);
+  if (AsyncFunctionAfter) {
+    await AsyncFunctionAfter(req, res, dbResponse);
+  }
 
-    //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
-    if (req.files) {
-      const dirDestino = `${__basedir}/files/${Db}/${collection}/${dbResponse.insertedId}/`;
-      if (!fs.existsSync(dirDestino)) {
-        fs.mkdirSync(dirDestino, { recursive: true });
-      }
-      const fotofile = req.files.file[0];
-      const pathDestino = dirDestino + fotofile.filename;
-      fs.renameSync(fotofile.path, pathDestino);
-      //actualizando el directorio al que se movio
+  //TODO regresar en la respuesta si las asignaciones fueron correctas
 
-      const foto = `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
-      await MongoWraper.UpdateMongoBy_id(
-        dbResponse.insertedId,
-        {
-          foto: foto,
-          fotopath: pathDestino,
-        },
-        collection,
-        Db
-      );
-
-      req.body.foto = foto;
-      req.body.fotopath = pathDestino;
-    }
-
-    if (AsyncFunctionAfter) {
-      await AsyncFunctionAfter(req, res, dbResponseFind);
-    }
-
-    //TODO regresar en la respuesta si las asignaciones fueron correctas
-
-    const objResp = {
-      status: "ok",
-      message: "completed",
-      data: dbResponseFind,
-      extra: req.extraresponse,
-    };
-    res.status(200).send(objResp);
-    // res
-    // .status(200)
-    // .send({ status: "ok", message: "face indexed", data: percentageUpdate });
+  const objResp = {
+    status: "ok",
+    message: "completed",
+    data: dbResponseFind,
+    extra: req.extraresponse,
   };
-const updatePatch = (ApiErrorFailDb, AsyncFunctionAfter, Databse, Collection) =>
-  async function (req, res) {
-    const collection = Collection ? Collection : req.route.path.match(re)[0];
-    const Db = Databse ? Databse : req.database;
+  res.status(200).send(objResp);
+  // res
+  // .status(200)
+  // .send({ status: "ok", message: "face indexed", data: percentageUpdate });
+};
+const updatePatch = (params) => async (req, res) => {
+  params = params ? params : {};
+  const {
+    Databse,
+    Collection,
+    PathDest,
+    PathTemp,
+    URL,
+    ApiErrorFailDb,
+    AsyncFunctionAfter,
+  } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
 
-    let dbResponse;
-    try {
-      // const dbFind = await MongoWraper.FindIDOne(
-      //   req.params._id,
-      //   collection,
-      //   Databse ? Databse : req.database
-      // );
+  // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  // const Db = Databse ? Databse : req.database;
 
-      // const spread = { ...dbFind, ...req.body };
-      dbResponse = await MongoWraper.UpdateMongoBy_id(
-        req.params._id,
-        req.body,
-        collection,
-        Db
-      );
-    } catch (err) {
-      console.log(err);
+  let dbResponse;
+  try {
+    dbResponse = await MongoWraper.UpdateMongoBy_id(
+      req.params._id,
+      req.body,
+      collection,
+      db
+    );
+  } catch (err) {
+    console.log(err);
 
-      throw new ApiErrorData(400, "db error", err);
+    throw new ApiErrorData(
+      400,
+      ApiErrorFailDb ? ApiErrorFailDb : "db error",
+      err
+    );
+  }
+  //ejecutando funcion extra si es requerido
+  if (AsyncFunctionAfter) {
+    await AsyncFunctionAfter(req, res, dbResponse);
+  }
+
+  //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
+  if (req.files) {
+    // const dirDestino = `${__basedir}/files/${Db}/${collection}/${req.params._id}/`;
+    const dirDestino = `${PathDest}/${db}/${collection}/${req.params._id}/`;
+    if (!fs.existsSync(dirDestino)) {
+      fs.mkdirSync(dirDestino, { recursive: true });
     }
-    delete dbResponse.connection;
-    //ejecutando funcion extra si es requerido
-    if (AsyncFunctionAfter) {
-      await AsyncFunctionAfter(req, res, dbResponse);
-    }
+    const fotofile = req.files.file[0];
+    const pathDestino = dirDestino + fotofile.filename;
+    fs.renameSync(fotofile.path, pathDestino);
+    //actualizando el directorio al que se movio
 
-    //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
-    if (req.files) {
-      const dirDestino = `${__basedir}/files/${Db}/${collection}/${req.params._id}/`;
-      if (!fs.existsSync(dirDestino)) {
-        fs.mkdirSync(dirDestino, { recursive: true });
-      }
-      const fotofile = req.files.file[0];
-      const pathDestino = dirDestino + fotofile.filename;
-      fs.renameSync(fotofile.path, pathDestino);
-      //actualizando el directorio al que se movio
+    await MongoWraper.UpdateMongoBy_id(
+      req.params._id,
+      {
+        // foto: `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${req.params._id}/${fotofile.filename}`,
+        foto: `${URL}/${db}/${collection}/${req.params._id}/${fotofile.filename}`,
+        fotopath: pathDestino,
+      },
+      collection,
+      db
+    );
+  }
 
-      await MongoWraper.UpdateMongoBy_id(
-        req.params._id,
-        {
-          foto: `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${req.params._id}/${fotofile.filename}`,
-          fotopath: pathDestino,
-        },
-        collection,
-        Db
-      );
-    }
-
-    const objResp = {
-      status: dbResponse.result.n === 0 ? "error" : "ok",
-      message: dbResponse.result.n === 0 ? "id not found" : "completed",
-      data: dbResponse,
-    };
-    res.status(200).send(objResp);
+  const objResp = {
+    status: "ok",
+    message: "completed",
+    data: dbResponse,
   };
+  res.status(200).send(objResp);
+};
 
-const remove = async function (req, res) {
-  const collection = req.originalUrl.match(re)[0];
+const remove = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
   try {
     const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
       req.params._id,
       collection,
-      req.database
+      db
     );
-    delete dbResponse.connection;
 
     const objResp = {
-      status: dbResponse.result.n === 0 ? "error" : "ok",
-      message: dbResponse.result.n === 0 ? "id not found" : "completed",
-      data: dbResponse.result,
+      status: "ok",
+      message: "completed",
+      data: dbResponse,
     };
     res.status(200).send(objResp);
   } catch (err) {
@@ -469,11 +508,16 @@ const remove = async function (req, res) {
   }
 };
 
-const uploadDocument = async function (req, res) {
-  const collection = req.originalUrl.match(re)[0];
+const uploadDocument = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
   console.log("adding picture to generic new with picture... " + collection);
   console.log(req.params._id);
-  const dir = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
+  //   const dir = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
+  const dir = `${PathDest}/${db}/${collection}/${req.params._id}/`;
 
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -496,7 +540,9 @@ const uploadDocument = async function (req, res) {
       console.log(req.body.data);
       const data = JSON.parse(req.body.data);
       console.log(data.name);
-      const url = `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+      //   const url = `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+      const url = `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+
       const newProperty = {
         [data.name]: {
           url: url,
@@ -509,20 +555,13 @@ const uploadDocument = async function (req, res) {
         req.params._id,
         newProperty,
         collection,
-        req.database
-      ).catch((err) => {
-        const objResp = {
-          status: "error",
-          message: "db error",
-          data: err,
-        };
-        res.status(400).send(objResp);
-      });
+        db
+      );
 
       const objResp = {
         status: "ok",
         message: "completed",
-        data: updated.result,
+        data: updated,
       };
       res.status(200).send(objResp);
     }
@@ -542,12 +581,16 @@ const uploadDocument = async function (req, res) {
   }
 };
 
-const docUpload = async function (req, res) {
-  const collection = req.originalUrl.match(re)[0];
+const docUpload = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
   console.log("adding picture to generic with picture... " + collection);
 
-  const dir = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
-
+  //   const dir = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
+  const dir = `${PathDest}/${db}/${collection}/${req.params._id}/`;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -574,7 +617,8 @@ const docUpload = async function (req, res) {
       console.log("debug:", "adding url to body");
       const data = JSON.parse(req.body.data);
       console.log(data.name);
-      const url = `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+      //   const url = `${ipServer}/api/v1/rules/fs/files/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+      const url = `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
       console.log("debug:", url);
       console.log("debug:", req.files.file[0].path);
       const newProperty = {
@@ -587,13 +631,13 @@ const docUpload = async function (req, res) {
       console.log("debug:", req.params._id);
       console.log("debug:", newProperty);
       console.log("debug:", collection);
-      console.log("debug:", req.database);
+      console.log("debug:", db);
       /// actualizar nuevos datos de rek y la nueva carpeta de trabajadores    ############################################
       await MongoWraper.UpdateMongoBy_id(
         req.params._id,
         newProperty,
         collection,
-        req.database
+        db
       ).catch((err) => {
         const objResp = {
           status: "error",
@@ -634,15 +678,15 @@ const docUpload = async function (req, res) {
   }
 };
 
-const docRemove = async function (req, res) {
-  const collection = req.originalUrl.match(re)[0];
+const docRemove = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
 
   try {
-    const dbFind = await MongoWraper.FindIDOne(
-      req.params._id,
-      collection,
-      req.database
-    );
+    const dbFind = await MongoWraper.FindIDOne(req.params._id, collection, db);
 
     console.log("aquivoy");
     console.log(dbFind[req.body.name]);
@@ -653,22 +697,22 @@ const docRemove = async function (req, res) {
       /// borrando archivo del viejo registro
       fs.unlinkSync(propertyToRemove.path);
 
-      const dbResponse = await MongoWraper.UpdateMongoBy_idRemoveProperty(
+      await MongoWraper.UpdateMongoBy_idRemoveProperty(
         req.params._id,
         req.body.name,
         collection,
-        req.database
+        db
       );
 
       const lastFind = await MongoWraper.FindIDOne(
         req.params._id,
         collection,
-        req.database
+        db
       );
 
       const objResp = {
-        status: dbResponse.result.n === 0 ? "error" : "ok",
-        message: dbResponse.result.n === 0 ? "id not found" : "completed",
+        status: "ok",
+        message: "completed",
         data: lastFind,
       };
       res.status(200).send(objResp);
@@ -688,12 +732,84 @@ const docRemove = async function (req, res) {
     };
     res.status(400).send(objResp);
   }
+
+  // if (!fs.existsSync(dir)) {
+  //   fs.mkdirSync(dir, { recursive: true });
+  // }
+  // req.folder = dir;
+
+  // try {
+  //   await uploadfileDatos(req, res);
+
+  //   if (req.files === undefined) {
+  //     /// en caso de que no se este subiendo archivos del modo adecuado
+  //     let objResp = {
+  //       status: "error",
+  //       message: "Please upload a file!",
+  //       data: "",
+  //     };
+  //     return res.status(400).send(objResp);
+  //   } else {
+  //     /// parseando datos que vengan como json dentro de form-data    ############################################
+  //     console.log(req.body.data);
+  //     const data = JSON.parse(req.body.data);
+  //     console.log(data.name);
+  //     const url = `http://${ipServer}:8050/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+  //     const newProperty = {
+  //       [data.name]: {
+  //         url: url,
+  //         path: req.files.file[0].path,
+  //       },
+  //     };
+
+  //     /// actualizar nuevos datos de rek y la nueva carpeta de trabajadores    ############################################
+  //     const updated = await MongoWraper.UpdateMongoBy_id(
+  //       req.params._id,
+  //       newProperty,
+  //       collection,
+  //       req.database
+  //     ).catch((err) => {
+  //       const objResp = {
+  //         status: "error",
+  //         message: "db error",
+  //         data: err,
+  //       };
+  //       res.status(400).send(objResp);
+  //     });
+
+  //     const objResp = {
+  //       status: "ok",
+  //       message: "completed",
+  //       data: updated.result,
+  //     };
+  //     res.status(200).send(objResp);
+  //   }
+  // } catch (err) {
+  //   /// en aso de que ocurra algun error en la subida de los archivos   ############################################
+  //   console.log(err);
+  //   const objResp = {
+  //     status: "error",
+  //     data: err,
+  //   };
+  //   if (err.code == "LIMIT_FILE_SIZE") {
+  //     objResp.message = "File size cannot be larger than 50MB!";
+  //     return res.status(400).send(objResp);
+  //   }
+  //   objResp.message = `Could not upload the file. ${err}`;
+  //   return res.status(400).send(objResp);
+  // }
 };
 
-const uploadAdd = async function (req, res) {
-  const collection = req.originalUrl.match(re)[0];
+const uploadAdd = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match
+  //   const collection = req.originalUrl.match(re)[0];
   console.log("uploading files... " + collection);
-  const dir = __basedir + "/files/" + req.database + "/tmp/";
+  //   const dir = __basedir + "/files/" + req.database + "/tmp/";
+  const dir = PathTemp;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -703,7 +819,7 @@ const uploadAdd = async function (req, res) {
     const docSubcontratista = await MongoWraper.FindIDOne(
       req.params._id,
       collection,
-      req.database
+      db
     ).catch((err) => {
       return null;
     });
@@ -729,7 +845,8 @@ const uploadAdd = async function (req, res) {
       return res.status(400).send(objResp);
     } else {
       // // moviendo archivo de temporal a la carpeta trabajador     ############################################
-      const dirDestino = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
+      //   const dirDestino = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
+      const dirDestino = `${PathDest}/${db}/${collection}/${req.params._id}/`;
       const pathDestino = dirDestino + req.files.file[0].filename;
       if (!fs.existsSync(dirDestino)) {
         fs.mkdirSync(dirDestino, { recursive: true });
@@ -740,7 +857,8 @@ const uploadAdd = async function (req, res) {
       const body = JSON.parse(req.body.data);
       const docTopush = {
         documentos: {
-          file: `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
+          //   file: `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
+          file: `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
           filepath: pathDestino,
           datetime: new Date(),
           ...body,
@@ -752,7 +870,7 @@ const uploadAdd = async function (req, res) {
         req.params._id,
         docTopush,
         collection,
-        req.database
+        db
       ).catch((err) => {
         const objResp = {
           status: "error",
@@ -765,7 +883,7 @@ const uploadAdd = async function (req, res) {
       docSubcontratista2 = await MongoWraper.FindIDOne(
         req.params._id,
         collection,
-        req.database
+        db
       ).catch((err) => {
         return null;
       });
@@ -793,388 +911,383 @@ const uploadAdd = async function (req, res) {
   }
 };
 
-const uploadPatch = (params) =>
-  async function (req, res) {
-    params = params ? params : {};
-    const { Databse, Collection, PathTemp, PathFinal, URL } = params;
-    const collection = Collection ? Collection : req.route.path.match(re)[0];
-    const db = Databse ? Databse : req.database;
-    // const collection = req.originalUrl.match(re)[0];
+const uploadPatch = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
 
-    console.log("Updating files... " + collection);
-    // const dir = __basedir + "/files/" + db + "/tmp/";
-    const dir = PathTemp;
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    req.folder = dir;
+  console.log("Updating files... " + collection);
+  const dir = PathTemp;
+  //   const dir = __basedir + "/files/" + req.database + "/tmp/";
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  req.folder = dir;
 
-    try {
-      const docSubcontratista = await MongoWraper.FindIDOne(
-        req.params._id,
-        collection,
-        req.database
-      ).catch((err) => {
-        return null;
-      });
-      if (docSubcontratista == null) {
-        const objResp = {
-          status: "error",
-          message: "_id del trabajador no econtrado",
-          data: {},
-        };
-        console.log(objResp);
-        return res.status(400).send(objResp);
-      }
-
-      await uploadfileDatos(req, res);
-      if (req.files === undefined) {
-        /// en caso de que no se este subiendo archivos del modo adecuado
-        let objResp = {
-          status: "error",
-          message: "Please upload a file!",
-          data: "",
-        };
-        return res.status(400).send(objResp);
-      } else {
-        /// si existen registros en ese array
-        const body = JSON.parse(req.body.data);
-        const existeAlguno = docSubcontratista.documentos.filter((carga) =>
-          carga.filename === body.filename ? carga : null
-        );
-        if (existeAlguno) {
-          // // moviendo archivo de temporal a la carpeta trabajador     ############################################
-          const dirDestino = `${PathFinal}/${collection}/${req.params._id}/`;
-          const pathDestino = dirDestino + req.files.file[0].filename;
-          fs.renameSync(req.files.file[0].path, pathDestino);
-
-          console.log(existeAlguno[0].filepath);
-          /// borrando archivo del viejo registro
-          fs.unlinkSync(existeAlguno[0].filepath);
-
-          body.file = `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
-          body.filepath = pathDestino;
-          const cargas = docSubcontratista.documentos.map((carga) =>
-            carga.filename === body.filename ? body : carga
-          );
-          docSubcontratista.documentos = cargas;
-
-          /// actualizar nuevos datos de rek y la nueva carpeta de trabajadores    ############################################
-          await MongoWraper.UpdateMongoBy_id(
-            req.params._id,
-            docSubcontratista,
-            collection,
-            db
-          ).catch((err) => {
-            const objResp = {
-              status: "error",
-              message: "db error",
-              data: err,
-            };
-            res.status(400).send(objResp);
-          });
-
-          const objResp = {
-            status: "ok",
-            message: "document updated",
-            data: docSubcontratista,
-          };
-          res.status(200).send(objResp);
-        } else {
-          const objResp = {
-            status: "error",
-            message: "documento a actualizar no encontrado",
-            data: {},
-          };
-          res.status(400).send(objResp);
-        }
-      }
-    } catch (err) {
-      /// en aso de que ocurra algun error en la subida de los archivos   ############################################
-      console.log(err);
+  try {
+    const docSubcontratista = await MongoWraper.FindIDOne(
+      req.params._id,
+      collection,
+      db
+    ).catch((err) => {
+      return null;
+    });
+    if (docSubcontratista == null) {
       const objResp = {
         status: "error",
-        data: err,
+        message: "_id del trabajador no econtrado",
+        data: {},
       };
-      if (err.code == "LIMIT_FILE_SIZE") {
-        objResp.message = "File size cannot be larger than 50MB!";
-        return res.status(400).send(objResp);
-      }
-      objResp.message = `Could not upload the file. ${err}`;
+      console.log(objResp);
       return res.status(400).send(objResp);
     }
-  };
 
-const uploadRemove = (params) =>
-  async function (req, res) {
-    params = params ? params : {};
-    const { Databse, Collection } = params;
-    const collection = Collection ? Collection : req.route.path.match(re)[0];
-    const db = Databse ? Databse : req.database;
+    await uploadfileDatos(req, res);
+    if (req.files === undefined) {
+      /// en caso de que no se este subiendo archivos del modo adecuado
+      let objResp = {
+        status: "error",
+        message: "Please upload a file!",
+        data: "",
+      };
+      return res.status(400).send(objResp);
+    } else {
+      /// si existen registros en ese array
+      const body = JSON.parse(req.body.data);
+      const existeAlguno = docSubcontratista.documentos.filter((carga) =>
+        carga.filename === body.filename ? carga : null
+      );
+      if (existeAlguno) {
+        // // moviendo archivo de temporal a la carpeta trabajador     ############################################
+        // const dirDestino = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
+        const dirDestino = PathDest;
+        const pathDestino = dirDestino + req.files.file[0].filename;
+        fs.renameSync(req.files.file[0].path, pathDestino);
 
-    // const collection = req.originalUrl.match(re)[0];
-    console.log("upload Remove... " + collection);
-    try {
-      const docSubcontratista = await MongoWraper.FindIDOne(
-        req.params._id,
-        collection,
-        db
-      ).catch((err) => {
-        return null;
-      });
+        console.log(existeAlguno[0].filepath);
+        /// borrando archivo del viejo registro
+        fs.unlinkSync(existeAlguno[0].filepath);
 
-      const newDocuments = docSubcontratista.documentos.filter((doc) => {
-        if (doc.filename === req.body.filename) {
-          /// en caso de que exista eliminar el registro no terornando nada y elimnando la foto
-          console.log("eliminando documento:");
-          console.log(doc);
-          if (fs.existsSync(doc.filepath)) {
-            console.log("si existe");
-            fs.unlinkSync(doc.filepath);
-          }
-        } else return doc;
-      });
-      docSubcontratista.documentos = newDocuments;
-      delete docSubcontratista._id;
-      console.log(docSubcontratista);
+        // body.file = `${ipServer}/api/v1/rules/fs/files/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+        body.file = `${URL}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
+        body.filepath = pathDestino;
+        const cargas = docSubcontratista.documentos.map((carga) =>
+          carga.filename === body.filename ? body : carga
+        );
+        docSubcontratista.documentos = cargas;
 
-      await MongoWraper.UpdateMongoBy_id(
-        req.params._id,
-        docSubcontratista,
-        collection,
-        db
-      ).catch((err) => {
+        /// actualizar nuevos datos de rek y la nueva carpeta de trabajadores    ############################################
+        await MongoWraper.UpdateMongoBy_id(
+          req.params._id,
+          docSubcontratista,
+          collection,
+          db
+        ).catch((err) => {
+          const objResp = {
+            status: "error",
+            message: "db error",
+            data: err,
+          };
+          res.status(400).send(objResp);
+        });
+
+        const objResp = {
+          status: "ok",
+          message: "document updated",
+          data: docSubcontratista,
+        };
+        res.status(200).send(objResp);
+      } else {
         const objResp = {
           status: "error",
-          message: "db error",
-          data: err,
+          message: "documento a actualizar no encontrado",
+          data: {},
         };
         res.status(400).send(objResp);
-      });
+      }
+    }
+  } catch (err) {
+    /// en aso de que ocurra algun error en la subida de los archivos   ############################################
+    console.log(err);
+    const objResp = {
+      status: "error",
+      data: err,
+    };
+    if (err.code == "LIMIT_FILE_SIZE") {
+      objResp.message = "File size cannot be larger than 50MB!";
+      return res.status(400).send(objResp);
+    }
+    objResp.message = `Could not upload the file. ${err}`;
+    return res.status(400).send(objResp);
+  }
+};
 
-      const objResp = {
-        status: "ok",
-        message: "completed",
-        data: newDocuments,
-      };
-      res.status(200).send(objResp);
-    } catch (err) {
+const uploadRemove = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+  //   const collection = req.originalUrl.match(re)[0];
+  console.log("upload Remove... " + collection);
+  try {
+    const docSubcontratista = await MongoWraper.FindIDOne(
+      req.params._id,
+      collection,
+      db
+    ).catch((err) => {
+      return null;
+    });
+
+    const newDocuments = docSubcontratista.documentos.filter((doc) => {
+      if (doc.filename === req.body.filename) {
+        /// en caso de que exista eliminar el registro no terornando nada y elimnando la foto
+        console.log("eliminando documento:");
+        console.log(doc);
+        if (fs.existsSync(doc.filepath)) {
+          console.log("si existe");
+          fs.unlinkSync(doc.filepath);
+        }
+      } else return doc;
+    });
+    docSubcontratista.documentos = newDocuments;
+    delete docSubcontratista._id;
+    console.log(docSubcontratista);
+
+    await MongoWraper.UpdateMongoBy_id(
+      req.params._id,
+      docSubcontratista,
+      collection,
+      db
+    ).catch((err) => {
       const objResp = {
         status: "error",
         message: "db error",
         data: err,
       };
       res.status(400).send(objResp);
-    }
-  };
-const listFilter = (params) =>
-  async function (req, res) {
-    params = params ? params : {};
-    const { Databse, Collection } = params;
-    const collection = Collection ? Collection : req.route.path.match(re)[0];
-    const db = Databse ? Databse : req.database;
+    });
 
-    // const db = req.database;
-    /// CON paginado infinito
-    const page = parseInt(req.query.page) || 0;
-    const limit = parseInt(req.query.limit);
-    console.log("path-------------------------");
-    console.log(req.route.path);
-    const re = /[a-zA-Z0-9_-]+/;
-    // const collection = req.originalUrl.match(re)[0];
-    console.log("collection-------------------------");
-    console.log(collection);
-
-    const NeidQueriesBuilder = Object.keys(req.query)
-      .filter((e) => e.includes("_neid"))
-      .map((e) => {
-        return { Property: e.replace("ne", ""), Search: req.query[e] };
-      });
-
-    const NeidMongoQueries = NeidQueriesBuilder.map((e) =>
-      GetGenericQueryNeid(e)
-    );
-
-    const NestringQueriesBuilder = Object.keys(req.query)
-      .filter((e) => e.includes("_nestring"))
-      .map((e) => {
-        return { Property: e.replace("_nestring", ""), Search: req.query[e] };
-      });
-
-    const NestringMongoQueries = NestringQueriesBuilder.map((e) =>
-      GetGenericQueryNestring(e)
-    );
-
-    const StringQueriesBuilder = Object.keys(req.query)
-      .filter((e) => e.includes("_string"))
-      .map((e) => {
-        return { Property: e.replace("_string", ""), Search: req.query[e] };
-      });
-
-    const StringtMongoQueries = StringQueriesBuilder.map((e) =>
-      GetGenericQueryString(e)
-    );
-
-    const IdQueriesBuilder = Object.keys(req.query)
-      .filter((e) => e.includes("_id"))
-      .map((e) => {
-        return { Property: e, Search: req.query[e] };
-      });
-
-    const IdMongoQueries = IdQueriesBuilder.map((e) => GetGenericQueryId(e));
-    // [{"$or":[{"proyectos_id":"61a795d36444930053e0c56d"},{"proyectos_id":"61a804ea67caea3647707d6b"}]}]
-    // console.log(JSON.stringify(IdMongoQueries));
-
-    const PartialQueriesBuilder = Object.keys(req.query)
-      .filter((e) => e.includes("_partial"))
-      .map((e) => {
-        return { Property: e.replace("_partial", ""), Search: req.query[e] };
-      });
-
-    const PartialMongoQueries = {
-      $or: PartialQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: newDocuments,
     };
-    // {"$or":[{"$and":[{"empresa":{"$regex":"Pab","$options":"si"}},{"empresa":{"$regex":"li","$options":"si"}}]},{"$and":[{"ciudad":{"$regex":"ag","$options":"si"}}]}]}
-
-    // const LookUpBuilder to check if its necesary to populate
-    var LookUpBuilder = [];
-    if (req.query.hasOwnProperty("lookup")) {
-      if (Array.isArray(req.query.lookup)) {
-        LookUpBuilder = req.query.lookup.map((e) => {
-          return {
-            $lookup: {
-              from: e,
-              localField: e + "_id",
-              foreignField: "_id",
-              as: e,
-            },
-          };
-        });
-      } else {
-        LookUpBuilder = [
-          {
-            $lookup: {
-              from: req.query.lookup,
-              localField: req.query.lookup + "_id",
-              foreignField: "_id",
-              as: req.query.lookup,
-            },
-          },
-        ];
-      }
-    }
-    console.log(LookUpBuilder);
-
-    const PropertyDateFilter = req.query.hasOwnProperty("propertydatefilter")
-      ? req.query.propertydatefilter
-      : "datetime";
-    const QueryDate =
-      req.query.hasOwnProperty("initialDate") &&
-      req.query.hasOwnProperty("finalDate")
-        ? [
-            {
-              [PropertyDateFilter]: {
-                $gte: new Date(req.query.initialDate),
-                $lt: new Date(req.query.finalDate),
-              },
-            },
-          ]
-        : [];
-
-    const exampleQuerie = {
-      $match: {
-        ...(req.query.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted),
-        ...(req.query.hasOwnProperty("showoculta") ? {} : Oculta),
-        // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
-        ...(IdMongoQueries.length > 0 ||
-        PartialQueriesBuilder.length > 0 ||
-        NeidMongoQueries.length > 0 ||
-        NestringMongoQueries.length > 0 ||
-        StringtMongoQueries.length > 0 ||
-        QueryDate.length > 0
-          ? {
-              $and: [
-                ...StringtMongoQueries,
-                ...IdMongoQueries,
-                ...NeidMongoQueries,
-                ...NestringMongoQueries,
-                ...(PartialQueriesBuilder.length > 0
-                  ? [PartialMongoQueries]
-                  : []),
-                ...QueryDate,
-              ],
-            }
-          : {}),
-      },
+    res.status(200).send(objResp);
+  } catch (err) {
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
     };
-    console.log(JSON.stringify(exampleQuerie, null, 4));
-    const AggregationMongo = [
-      ...LookUpBuilder,
-      exampleQuerie,
-      { $sort: { _id: -1 } },
-      ...(limit > 0
-        ? [
-            {
-              $facet: {
-                Total: [{ $count: "Total" }],
-                Results: [
-                  { $skip: page > 0 ? page * limit : 0 },
-                  { $limit: limit },
-                ],
-              },
-            },
-          ]
-        : []),
-    ];
-    // console.log(JSON.stringify(AggregationMongo, null, 4));
-
-    try {
-      console.log(page);
-      console.log(limit);
-      console.log(collection);
-
-      const dbResponse = await MongoWraper.AggregationMongo(
-        AggregationMongo,
-        collection,
-        db
-      );
-      console.log(dbResponse);
-      const objResp = {
-        status: "ok",
-        message: "completed",
-        data:
-          limit > 0
-            ? {
-                ...dbResponse[0],
-                Total:
-                  dbResponse[0].Total.length > 0
-                    ? dbResponse[0].Total[0].Total
-                    : 0,
-              }
-            : dbResponse,
-      };
-      res.status(200).send(objResp);
-    } catch (err) {
-      console.log(err);
-      const objResp = {
-        status: "error",
-        message: "db error",
-        data: err,
-      };
-      res.status(500).send(objResp);
-    }
-  };
-
-const pullIdFromArrayManagementDB = (params) => async (req, res) => {
-  // const example = {
-  // Collection:"Users",
-  //   Match: { Name: "Subcontractor_id", Value: "" },
-  //   ItemsToRemove: { Name: "Obras_id", Values: [] },
-  // };
+    res.status(400).send(objResp);
+  }
+};
+const listFilter = (params) => async (req, res) => {
   params = params ? params : {};
   const { Databse, Collection } = params;
-  const collection = Collection ? Collection : req.route.path.match(re)[0];
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
+  //   const db = req.database;
+  /// CON paginado infinito
+  const page = parseInt(req.query.page) || 0;
+  const limit = parseInt(req.query.limit);
+  console.log("path-------------------------");
+  console.log(req.originalUrl);
+  const re = /[a-zA-Z0-9_-]+/;
+  //   const collection = req.originalUrl.match(re)[0];
+  console.log("collection-------------------------");
+  console.log(collection);
+
+  const NeidQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_neid"))
+    .map((e) => {
+      return { Property: e.replace("ne", ""), Search: req.query[e] };
+    });
+
+  const NeidMongoQueries = NeidQueriesBuilder.map((e) =>
+    GetGenericQueryNeid(e)
+  );
+
+  const NestringQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_nestring"))
+    .map((e) => {
+      return { Property: e.replace("_nestring", ""), Search: req.query[e] };
+    });
+
+  const NestringMongoQueries = NestringQueriesBuilder.map((e) =>
+    GetGenericQueryNestring(e)
+  );
+
+  const StringQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_string"))
+    .map((e) => {
+      return { Property: e.replace("_string", ""), Search: req.query[e] };
+    });
+
+  const StringtMongoQueries = StringQueriesBuilder.map((e) =>
+    GetGenericQueryString(e)
+  );
+
+  const IdQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_id"))
+    .map((e) => {
+      return { Property: e, Search: req.query[e] };
+    });
+
+  const IdMongoQueries = IdQueriesBuilder.map((e) => GetGenericQueryId(e));
+  // [{"$or":[{"proyectos_id":"61a795d36444930053e0c56d"},{"proyectos_id":"61a804ea67caea3647707d6b"}]}]
+  // console.log(JSON.stringify(IdMongoQueries));
+
+  const PartialQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_partial"))
+    .map((e) => {
+      return { Property: e.replace("_partial", ""), Search: req.query[e] };
+    });
+
+  const PartialMongoQueries = {
+    $or: PartialQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
+  };
+  // {"$or":[{"$and":[{"empresa":{"$regex":"Pab","$options":"si"}},{"empresa":{"$regex":"li","$options":"si"}}]},{"$and":[{"ciudad":{"$regex":"ag","$options":"si"}}]}]}
+
+  // const LookUpBuilder to check if its necesary to populate
+  var LookUpBuilder = [];
+  if (req.query.hasOwnProperty("lookup")) {
+    if (Array.isArray(req.query.lookup)) {
+      LookUpBuilder = req.query.lookup.map((e) => {
+        return {
+          $lookup: {
+            from: e,
+            localField: e + "_id",
+            foreignField: "_id",
+            as: e,
+          },
+        };
+      });
+    } else {
+      LookUpBuilder = [
+        {
+          $lookup: {
+            from: req.query.lookup,
+            localField: req.query.lookup + "_id",
+            foreignField: "_id",
+            as: req.query.lookup,
+          },
+        },
+      ];
+    }
+  }
+  console.log(LookUpBuilder);
+
+  const PropertyDateFilter = req.query.hasOwnProperty("propertydatefilter")
+    ? req.query.propertydatefilter
+    : "datetime";
+  const QueryDate =
+    req.query.hasOwnProperty("initialDate") &&
+    req.query.hasOwnProperty("finalDate")
+      ? [
+          {
+            [PropertyDateFilter]: {
+              $gte: new Date(req.query.initialDate),
+              $lt: new Date(req.query.finalDate),
+            },
+          },
+        ]
+      : [];
+
+  const exampleQuerie = {
+    $match: {
+      ...(req.query.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted),
+      ...(req.query.hasOwnProperty("showoculta") ? {} : Oculta),
+      // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
+      ...(IdMongoQueries.length > 0 ||
+      PartialQueriesBuilder.length > 0 ||
+      NeidMongoQueries.length > 0 ||
+      NestringMongoQueries.length > 0 ||
+      StringtMongoQueries.length > 0 ||
+      QueryDate.length > 0
+        ? {
+            $and: [
+              ...StringtMongoQueries,
+              ...IdMongoQueries,
+              ...NeidMongoQueries,
+              ...NestringMongoQueries,
+              ...(PartialQueriesBuilder.length > 0
+                ? [PartialMongoQueries]
+                : []),
+              ...QueryDate,
+            ],
+          }
+        : {}),
+    },
+  };
+  console.log(JSON.stringify(exampleQuerie, null, 4));
+  const AggregationMongo = [
+    ...LookUpBuilder,
+    exampleQuerie,
+    { $sort: { _id: -1 } },
+    ...(limit > 0
+      ? [
+          {
+            $facet: {
+              Total: [{ $count: "Total" }],
+              Results: [
+                { $skip: page > 0 ? page * limit : 0 },
+                { $limit: limit },
+              ],
+            },
+          },
+        ]
+      : []),
+  ];
+  // console.log(JSON.stringify(AggregationMongo, null, 4));
+
+  try {
+    console.log(page);
+    console.log(limit);
+    console.log(collection);
+
+    const dbResponse = await MongoWraper.AggregationMongo(
+      AggregationMongo,
+      collection,
+      db
+    );
+    console.log(dbResponse);
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data:
+        limit > 0
+          ? {
+              ...dbResponse[0],
+              Total:
+                dbResponse[0].Total.length > 0
+                  ? dbResponse[0].Total[0].Total
+                  : 0,
+            }
+          : dbResponse,
+    };
+    res.status(200).send(objResp);
+  } catch (err) {
+    console.log(err);
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
+    };
+    res.status(500).send(objResp);
+  }
+};
+
+const pullIdFromArrayManagementDB = (params) => async (req, res) => {
+  params = params ? params : {};
+  const { Databse, Collection } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Databse ? Databse : req.database;
+
+  //   const db = "managementdb";
+  //   const collection = req.body.Collection;
 
   const Query = { [req.body.Match.Name]: ObjectId(req.body.Match.Value) };
   const ItemsToRemove = {
