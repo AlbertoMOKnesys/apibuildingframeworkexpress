@@ -1095,7 +1095,7 @@ const listFilter = (params) => async (req, res) => {
   const limit = parseInt(req.query.limit);
   console.log("path-------------------------");
   console.log(req.originalUrl);
-  const re = /[a-zA-Z0-9_-]+/;
+
   //   const collection = req.originalUrl.match(re)[0];
   console.log("collection-------------------------");
   console.log(collection);
