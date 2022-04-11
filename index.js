@@ -1314,18 +1314,18 @@ module.exports = (mongoWraperEasyClient) => {
   // const MongoWraper = require("mongoclienteasywrapper")(url);
 
   return {
-    pullIdFromArrayManagementDB,
-    listFilter,
-    uploadRemove,
-    uploadPatch,
-    uploadAdd,
-    docRemove,
-    docUpload,
-    uploadDocument,
-    remove,
-    updatePatch,
-    create,
-    listOne,
-    list,
+    pullIdFromArrayManagementDB: pullIdFromArrayManagementDB,
+    listFilter: listFilter,
+    uploadRemove: uploadRemove,
+    uploadPatch: uploadPatch,
+    uploadAdd: uploadAdd,
+    docRemove: docRemove,
+    docUpload: docUpload,
+    uploadDocument: uploadDocument,
+    remove: remove,
+    updatePatch: updatePatch,
+    create: create,
+    listOne: listOne,
+    list: list,
   };
 };
