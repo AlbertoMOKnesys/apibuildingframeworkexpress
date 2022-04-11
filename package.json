@@ -1,0 +1,28 @@
+{
+  "name": "apibuildingframeworkexpress",
+  "version": "1.0.0",
+  "description": "fast api building over express",
+  "main": "index.js",
+  "scripts": {
+    "test": "test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlbertoMOKnesys/apibuildingframeworkexpress.git"
+  },
+  "keywords": [
+    "express",
+    "fast"
+  ],
+  "author": "Alberto Martinez, Gustavo Luna, Taylor Gonzalez, Jose Tello",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/AlbertoMOKnesys/apibuildingframeworkexpress/issues"
+  },
+  "homepage": "https://github.com/AlbertoMOKnesys/apibuildingframeworkexpress#readme",
+  "dependencies": {
+    "mongodb": "^4.5.0",
+    "multer": "^1.4.4",
+    "uuid": "^8.3.2"
+  }
+}
