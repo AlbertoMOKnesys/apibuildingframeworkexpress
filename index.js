@@ -302,8 +302,7 @@ const create = (params) => async (req, res) => {
   const {
     Databse,
     Collection,
-    PathDest,
-    PathTemp,
+    PathBaseFile,
     URL,
     ApiErrorFailDb,
     AsyncFunctionAfter,
@@ -360,7 +359,7 @@ const create = (params) => async (req, res) => {
   //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
   if (req.files) {
     // const dirDestino = `${__basedir}/files/${Db}/${collection}/${dbResponse.insertedId}/`;
-    const dirDestino = `${PathDest}/${db}/${collection}/${dbResponse.insertedId}/`;
+    const dirDestino = `${PathBaseFile}/${db}/${collection}/${dbResponse.insertedId}/`;
     if (!fs.existsSync(dirDestino)) {
       fs.mkdirSync(dirDestino, { recursive: true });
     }
@@ -413,8 +412,7 @@ const updatePatch = (params) => async (req, res) => {
   const {
     Databse,
     Collection,
-    PathDest,
-    PathTemp,
+    PathBaseFile,
     URL,
     ApiErrorFailDb,
     AsyncFunctionAfter,
@@ -450,7 +448,7 @@ const updatePatch = (params) => async (req, res) => {
   //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
   if (req.files) {
     // const dirDestino = `${__basedir}/files/${Db}/${collection}/${req.params._id}/`;
-    const dirDestino = `${PathDest}/${db}/${collection}/${req.params._id}/`;
+    const dirDestino = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
     if (!fs.existsSync(dirDestino)) {
       fs.mkdirSync(dirDestino, { recursive: true });
     }
@@ -481,7 +479,7 @@ const updatePatch = (params) => async (req, res) => {
 
 const remove = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -510,14 +508,14 @@ const remove = (params) => async (req, res) => {
 
 const uploadDocument = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   console.log("adding picture to generic new with picture... " + collection);
   console.log(req.params._id);
   //   const dir = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
-  const dir = `${PathDest}/${db}/${collection}/${req.params._id}/`;
+  const dir = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
 
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -583,14 +581,14 @@ const uploadDocument = (params) => async (req, res) => {
 
 const docUpload = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   console.log("adding picture to generic with picture... " + collection);
 
   //   const dir = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
-  const dir = `${PathDest}/${db}/${collection}/${req.params._id}/`;
+  const dir = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -680,7 +678,7 @@ const docUpload = (params) => async (req, res) => {
 
 const docRemove = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -802,14 +800,14 @@ const docRemove = (params) => async (req, res) => {
 
 const uploadAdd = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match
   //   const collection = req.originalUrl.match(re)[0];
   console.log("uploading files... " + collection);
   //   const dir = __basedir + "/files/" + req.database + "/tmp/";
-  const dir = PathTemp;
+  const dir = `${PathBaseFile}/${db}/tmp/`;
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -846,7 +844,7 @@ const uploadAdd = (params) => async (req, res) => {
     } else {
       // // moviendo archivo de temporal a la carpeta trabajador     ############################################
       //   const dirDestino = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
-      const dirDestino = `${PathDest}/${db}/${collection}/${req.params._id}/`;
+      const dirDestino = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
       const pathDestino = dirDestino + req.files.file[0].filename;
       if (!fs.existsSync(dirDestino)) {
         fs.mkdirSync(dirDestino, { recursive: true });
@@ -913,13 +911,13 @@ const uploadAdd = (params) => async (req, res) => {
 
 const uploadPatch = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match(re)[0];
 
   console.log("Updating files... " + collection);
-  const dir = PathTemp;
+  const dir = `${PathBaseFile}/${req.database}/tmp/`;
   //   const dir = __basedir + "/files/" + req.database + "/tmp/";
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
@@ -962,7 +960,8 @@ const uploadPatch = (params) => async (req, res) => {
       if (existeAlguno) {
         // // moviendo archivo de temporal a la carpeta trabajador     ############################################
         // const dirDestino = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
-        const dirDestino = PathDest;
+        // `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
+        const dirDestino = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
         const pathDestino = dirDestino + req.files.file[0].filename;
         fs.renameSync(req.files.file[0].path, pathDestino);
 
@@ -1026,7 +1025,7 @@ const uploadPatch = (params) => async (req, res) => {
 
 const uploadRemove = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathDest, PathTemp, URL } = params;
+  const { Databse, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Databse ? Databse : req.database;
   //   const collection = req.originalUrl.match(re)[0];
