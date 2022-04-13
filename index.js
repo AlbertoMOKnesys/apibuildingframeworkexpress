@@ -138,7 +138,7 @@ const GetGenericQueryPartial = (Query) => {
 
   return { $and: fullAndArray };
 };
-
+//probado
 const list = (params) => async (req, res) => {
   params = params ? params : {};
   const { Databse, Collection } = params;
@@ -352,7 +352,7 @@ const create = (params) => async (req, res) => {
   });
   //
 
-  const PromisesAssign = Asignaciones.map((e) => Assing(e, Db, Db));
+  const PromisesAssign = Asignaciones.map((e) => Assing(e, db, db));
 
   await Promise.all(PromisesAssign);
 
@@ -578,7 +578,7 @@ const uploadDocument = (params) => async (req, res) => {
     return res.status(400).send(objResp);
   }
 };
-
+//probado
 const docUpload = (params) => async (req, res) => {
   params = params ? params : {};
   const { Databse, Collection, PathBaseFile, URL } = params;
@@ -675,7 +675,7 @@ const docUpload = (params) => async (req, res) => {
     return res.status(400).send(objResp);
   }
 };
-
+//probados
 const docRemove = (params) => async (req, res) => {
   params = params ? params : {};
   const { Databse, Collection, PathBaseFile, URL } = params;
@@ -1083,6 +1083,7 @@ const uploadRemove = (params) => async (req, res) => {
     res.status(400).send(objResp);
   }
 };
+//probado
 const listFilter = (params) => async (req, res) => {
   params = params ? params : {};
   const { Databse, Collection } = params;
