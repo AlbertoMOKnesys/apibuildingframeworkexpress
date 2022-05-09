@@ -1084,6 +1084,38 @@ const uploadRemove = (params) => async (req, res) => {
   }
 };
 //probado
+const distinct = (params) =>
+  async function (req, res) {
+    params = params ? params : {};
+    const { Databse, Collection, DistinctQuery } = params;
+    const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+    const db = Databse ? Databse : req.database;
+
+    console.log(collection);
+    console.log(db);
+    try {
+      const dbResponse = await MongoWraper.Distinct(
+        DistinctQuery,
+        collection,
+        db
+      );
+      console.log(dbResponse);
+      const objResp = {
+        status: "ok",
+        message: "completed",
+        data: dbResponse == null ? {} : dbResponse,
+      };
+      res.status(200).send(objResp);
+    } catch (err) {
+      const objResp = {
+        status: "error",
+        message: "db error",
+        data: err,
+      };
+      res.status(500).send(objResp);
+    }
+  };
+
 const listFilter = (params) => async (req, res) => {
   params = params ? params : {};
   const { Databse, Collection } = params;
@@ -1099,6 +1131,45 @@ const listFilter = (params) => async (req, res) => {
   //   const collection = req.originalUrl.match(re)[0];
   console.log("collection-------------------------");
   console.log(collection);
+  // seccion para solo traer los comps requeridos por el usuario
+  var ProjectMongo = {};
+  if (req.query.hasOwnProperty("projectMongo")) {
+    if (Array.isArray(req.query.projectMongo)) {
+      ProjectMongo = req.query.projectMongo.reduce((acum, e) => {
+        return { ...acum, [e]: true };
+      }, {});
+    } else {
+      ProjectMongo = { [req.query.projectMongo]: true };
+    }
+  }
+  //Seccion para ordenar todo segun lo requiera el usuario
+  var SortMongoAsc = {};
+  if (req.query.hasOwnProperty("sortMongoAsc")) {
+    if (Array.isArray(req.query.sortMongoAsc)) {
+      SortMongoAsc = req.query.sortMongoAsc.reduce((acum, e) => {
+        return { ...acum, [e]: 1 };
+      }, {});
+    } else {
+      SortMongoAsc = { [req.query.sortMongoAsc]: true };
+    }
+  }
+  var SortMongoDec = {};
+  if (req.query.hasOwnProperty("sortMongoDec")) {
+    if (Array.isArray(req.query.sortMongoDec)) {
+      SortMongoDec = req.query.sortMongoDec.reduce((acum, e) => {
+        return { ...acum, [e]: -1 };
+      }, {});
+    } else {
+      SortMongoDec = { [req.query.sortMongoDec]: true };
+    }
+  }
+  var SortMongo = {};
+  if (
+    req.query.hasOwnProperty("sortMongoDec") ||
+    req.query.hasOwnProperty("sortMongoAsc")
+  ) {
+    SortMongo = { ...SortMongoAsc, SortMongoDec };
+  }
 
   const NeidQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_neid"))
@@ -1226,7 +1297,10 @@ const listFilter = (params) => async (req, res) => {
   const AggregationMongo = [
     ...LookUpBuilder,
     exampleQuerie,
-    { $sort: { _id: -1 } },
+    ...(Object.keys(ProjectMongo).length > 0
+      ? [{ $project: ProjectMongo }]
+      : []),
+    { $sort: Object.keys(SortMongo).length > 0 ? SortMongo : { _id: -1 } },
     ...(limit > 0
       ? [
           {
@@ -1321,6 +1395,7 @@ module.exports = (mongoWraperEasyClient) => {
     uploadAdd: uploadAdd,
     docRemove: docRemove,
     docUpload: docUpload,
+    distinct: distinct,
     uploadDocument: uploadDocument,
     remove: remove,
     updatePatch: updatePatch,
