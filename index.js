@@ -141,9 +141,9 @@ const GetGenericQueryPartial = (Query) => {
 //probado
 const list = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection } = params;
+  const { Database, Collection } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   console.log("collection", collection);
   const hasOrder =
@@ -266,9 +266,9 @@ const list = (params) => async (req, res) => {
 
 const listOne = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection } = params;
+  const { Database, Collection } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
 
   // console.log(req.originalUrl);
   // console.log(req.originalUrl);
@@ -300,7 +300,7 @@ const listOne = (params) => async (req, res) => {
 const create = (params) => async (req, res) => {
   params = params ? params : {};
   const {
-    Databse,
+    Database,
     Collection,
     PathBaseFile,
     URL,
@@ -308,10 +308,10 @@ const create = (params) => async (req, res) => {
     AsyncFunctionAfter,
   } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
 
   // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  // const Db = Databse ? Databse : req.database;
+  // const Db = Database ? Database : req.database;
 
   //codigo nuevo para asignar al momento de insertar
 
@@ -410,7 +410,7 @@ const create = (params) => async (req, res) => {
 const updatePatch = (params) => async (req, res) => {
   params = params ? params : {};
   const {
-    Databse,
+    Database,
     Collection,
     PathBaseFile,
     URL,
@@ -418,10 +418,10 @@ const updatePatch = (params) => async (req, res) => {
     AsyncFunctionAfter,
   } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
 
   // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  // const Db = Databse ? Databse : req.database;
+  // const Db = Database ? Database : req.database;
 
   let dbResponse;
   try {
@@ -479,9 +479,9 @@ const updatePatch = (params) => async (req, res) => {
 
 const remove = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   try {
     const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
@@ -508,9 +508,9 @@ const remove = (params) => async (req, res) => {
 
 const uploadDocument = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   console.log("adding picture to generic new with picture... " + collection);
   console.log(req.params._id);
@@ -581,9 +581,9 @@ const uploadDocument = (params) => async (req, res) => {
 //probado
 const docUpload = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   console.log("adding picture to generic with picture... " + collection);
 
@@ -678,9 +678,9 @@ const docUpload = (params) => async (req, res) => {
 //probados
 const docRemove = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
 
   try {
@@ -800,9 +800,9 @@ const docRemove = (params) => async (req, res) => {
 
 const uploadAdd = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match
   //   const collection = req.originalUrl.match(re)[0];
   console.log("uploading files... " + collection);
@@ -911,9 +911,9 @@ const uploadAdd = (params) => async (req, res) => {
 
 const uploadPatch = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
 
   console.log("Updating files... " + collection);
@@ -1025,9 +1025,9 @@ const uploadPatch = (params) => async (req, res) => {
 
 const uploadRemove = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
   console.log("upload Remove... " + collection);
   try {
@@ -1087,9 +1087,9 @@ const uploadRemove = (params) => async (req, res) => {
 const distinct = (params) =>
   async function (req, res) {
     params = params ? params : {};
-    const { Databse, Collection, DistinctQuery } = params;
+    const { Database, Collection, DistinctQuery } = params;
     const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-    const db = Databse ? Databse : req.database;
+    const db = Database ? Database : req.database;
 
     console.log(collection);
     console.log(db);
@@ -1118,9 +1118,9 @@ const distinct = (params) =>
 
 const listFilter = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection } = params;
+  const { Database, Collection } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
   //   const db = req.database;
   /// CON paginado infinito
   const page = parseInt(req.query.page) || 0;
@@ -1150,7 +1150,7 @@ const listFilter = (params) => async (req, res) => {
         return { ...acum, [e]: 1 };
       }, {});
     } else {
-      SortMongoAsc = { [req.query.sortMongoAsc]: true };
+      SortMongoAsc = { [req.query.sortMongoAsc]: 1 };
     }
   }
   var SortMongoDec = {};
@@ -1160,7 +1160,7 @@ const listFilter = (params) => async (req, res) => {
         return { ...acum, [e]: -1 };
       }, {});
     } else {
-      SortMongoDec = { [req.query.sortMongoDec]: true };
+      SortMongoDec = { [req.query.sortMongoDec]: -1 };
     }
   }
   var SortMongo = {};
@@ -1168,8 +1168,10 @@ const listFilter = (params) => async (req, res) => {
     req.query.hasOwnProperty("sortMongoDec") ||
     req.query.hasOwnProperty("sortMongoAsc")
   ) {
-    SortMongo = { ...SortMongoAsc, SortMongoDec };
+    SortMongo = { ...SortMongoAsc, ...SortMongoDec };
   }
+  console.log("Ordenamiento");
+  console.log(SortMongo);
 
   const NeidQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_neid"))
@@ -1356,9 +1358,9 @@ const listFilter = (params) => async (req, res) => {
 
 const pullIdFromArrayManagementDB = (params) => async (req, res) => {
   params = params ? params : {};
-  const { Databse, Collection } = params;
+  const { Database, Collection } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Databse ? Databse : req.database;
+  const db = Database ? Database : req.database;
 
   //   const db = "managementdb";
   //   const collection = req.body.Collection;
