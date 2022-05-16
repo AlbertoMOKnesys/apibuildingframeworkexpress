@@ -4,6 +4,7 @@ const fs = require("fs");
 const uploadfileDatos = require("./uploadFileData");
 // const { ipServer } = require("../config/vars");
 const { ApiError, ApiErrorData } = require("./ApiError");
+const { nextTick } = require("process");
 const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
 const Oculta = { oculta: { $ne: true } };
@@ -139,9 +140,9 @@ const GetGenericQueryPartial = (Query) => {
   return { $and: fullAndArray };
 };
 //probado
-const list = (params) => async (req, res) => {
+const list = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection } = params;
+  const { Database, Collection, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -216,6 +217,10 @@ const list = (params) => async (req, res) => {
         rows: acople.length,
         data: acople,
       };
+      if (Middleware) {
+        req.Response = objResp;
+        return next();
+      }
       res.status(200).send(objResp);
     } catch (err) {
       const objResp = {
@@ -264,9 +269,9 @@ const list = (params) => async (req, res) => {
   }
 };
 
-const listOne = (params) => async (req, res) => {
+const listOne = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection } = params;
+  const { Database, Collection, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
 
@@ -286,6 +291,10 @@ const listOne = (params) => async (req, res) => {
       message: "completed",
       data: dbResponse == null ? {} : dbResponse,
     };
+    if (Middleware) {
+      req.Response = objResp;
+      return next();
+    }
     res.status(200).send(objResp);
   } catch (err) {
     const objResp = {
@@ -297,7 +306,7 @@ const listOne = (params) => async (req, res) => {
   }
 };
 
-const create = (params) => async (req, res) => {
+const create = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
     Database,
@@ -306,6 +315,7 @@ const create = (params) => async (req, res) => {
     URL,
     ApiErrorFailDb,
     AsyncFunctionAfter,
+    Middleware,
   } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
@@ -402,12 +412,16 @@ const create = (params) => async (req, res) => {
     data: dbResponseFind,
     extra: req.extraresponse,
   };
+  if (Middleware) {
+    req.Response = objResp;
+    return next();
+  }
   res.status(200).send(objResp);
   // res
   // .status(200)
   // .send({ status: "ok", message: "face indexed", data: percentageUpdate });
 };
-const updatePatch = (params) => async (req, res) => {
+const updatePatch = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
     Database,
@@ -416,6 +430,7 @@ const updatePatch = (params) => async (req, res) => {
     URL,
     ApiErrorFailDb,
     AsyncFunctionAfter,
+    Middleware,
   } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
@@ -474,12 +489,16 @@ const updatePatch = (params) => async (req, res) => {
     message: "completed",
     data: dbResponse,
   };
+  if (Middleware) {
+    req.Response = objResp;
+    return next();
+  }
   res.status(200).send(objResp);
 };
 
-const remove = (params) => async (req, res) => {
+const remove = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -495,6 +514,10 @@ const remove = (params) => async (req, res) => {
       message: "completed",
       data: dbResponse,
     };
+    if (Middleware) {
+      req.Response = objResp;
+      return next();
+    }
     res.status(200).send(objResp);
   } catch (err) {
     const objResp = {
@@ -506,82 +529,10 @@ const remove = (params) => async (req, res) => {
   }
 };
 
-const uploadDocument = (params) => async (req, res) => {
+//Agrega icono
+const docUpload = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-  //   const collection = req.originalUrl.match(re)[0];
-  console.log("adding picture to generic new with picture... " + collection);
-  console.log(req.params._id);
-  //   const dir = `${__basedir}/files/${db}/${collection}/${req.params._id}/`;
-  const dir = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
-
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  req.folder = dir;
-
-  try {
-    await uploadfileDatos(req, res);
-
-    if (req.files === undefined) {
-      /// en caso de que no se este subiendo archivos del modo adecuado
-      let objResp = {
-        status: "error",
-        message: "Please upload a file!",
-        data: "",
-      };
-      return res.status(400).send(objResp);
-    } else {
-      /// parseando datos que vengan como json dentro de form-data    ############################################
-      console.log(req.body.data);
-      const data = JSON.parse(req.body.data);
-      console.log(data.name);
-      //   const url = `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
-      const url = `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
-
-      const newProperty = {
-        [data.name]: {
-          url: url,
-          path: req.files.file[0].path,
-        },
-      };
-
-      /// actualizar nuevos datos de rek y la nueva carpeta de trabajadores    ############################################
-      const updated = await MongoWraper.UpdateMongoBy_id(
-        req.params._id,
-        newProperty,
-        collection,
-        db
-      );
-
-      const objResp = {
-        status: "ok",
-        message: "completed",
-        data: updated,
-      };
-      res.status(200).send(objResp);
-    }
-  } catch (err) {
-    /// en aso de que ocurra algun error en la subida de los archivos   ############################################
-    console.log(err);
-    const objResp = {
-      status: "error",
-      data: err,
-    };
-    if (err.code == "LIMIT_FILE_SIZE") {
-      objResp.message = "File size cannot be larger than 50MB!";
-      return res.status(400).send(objResp);
-    }
-    objResp.message = `Could not upload the file. ${err}`;
-    return res.status(400).send(objResp);
-  }
-};
-//probado
-const docUpload = (params) => async (req, res) => {
-  params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -658,6 +609,10 @@ const docUpload = (params) => async (req, res) => {
         message: "completed",
         data: dbFind,
       };
+      if (Middleware) {
+        req.Response = objResp;
+        return next();
+      }
       res.status(200).send(objResp);
     }
   } catch (err) {
@@ -675,10 +630,10 @@ const docUpload = (params) => async (req, res) => {
     return res.status(400).send(objResp);
   }
 };
-//probados
-const docRemove = (params) => async (req, res) => {
+//Remueve icono
+const docRemove = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -713,6 +668,10 @@ const docRemove = (params) => async (req, res) => {
         message: "completed",
         data: lastFind,
       };
+      if (Middleware) {
+        req.Response = objResp;
+        return next();
+      }
       res.status(200).send(objResp);
     } else {
       const objResp = {
@@ -798,9 +757,10 @@ const docRemove = (params) => async (req, res) => {
   // }
 };
 
-const uploadAdd = (params) => async (req, res) => {
+//Agrega Docuemento
+const uploadAdd = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match
@@ -891,6 +851,10 @@ const uploadAdd = (params) => async (req, res) => {
         message: "document added",
         data: docSubcontratista2,
       };
+      if (Middleware) {
+        req.Response = objResp;
+        return next();
+      }
       res.status(200).send(objResp);
     }
   } catch (err) {
@@ -909,9 +873,10 @@ const uploadAdd = (params) => async (req, res) => {
   }
 };
 
-const uploadPatch = (params) => async (req, res) => {
+//Actualiza Docuemento
+const uploadPatch = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -997,6 +962,10 @@ const uploadPatch = (params) => async (req, res) => {
           message: "document updated",
           data: docSubcontratista,
         };
+        if (Middleware) {
+          req.Response = objResp;
+          return next();
+        }
         res.status(200).send(objResp);
       } else {
         const objResp = {
@@ -1023,9 +992,10 @@ const uploadPatch = (params) => async (req, res) => {
   }
 };
 
-const uploadRemove = (params) => async (req, res) => {
+//Remueve Docuemento
+const uploadRemove = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL } = params;
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
@@ -1073,6 +1043,10 @@ const uploadRemove = (params) => async (req, res) => {
       message: "completed",
       data: newDocuments,
     };
+    if (Middleware) {
+      req.Response = objResp;
+      return next();
+    }
     res.status(200).send(objResp);
   } catch (err) {
     const objResp = {
@@ -1085,9 +1059,9 @@ const uploadRemove = (params) => async (req, res) => {
 };
 //probado
 const distinct = (params) =>
-  async function (req, res) {
+  async function (req, res, next) {
     params = params ? params : {};
-    const { Database, Collection, DistinctQuery } = params;
+    const { Database, Collection, DistinctQuery, Middleware } = params;
     const collection = Collection ? Collection : req.originalUrl.match(re)[0];
     const db = Database ? Database : req.database;
 
@@ -1105,6 +1079,10 @@ const distinct = (params) =>
         message: "completed",
         data: dbResponse == null ? {} : dbResponse,
       };
+      if (Middleware) {
+        req.Response = objResp;
+        return next();
+      }
       res.status(200).send(objResp);
     } catch (err) {
       const objResp = {
@@ -1116,9 +1094,9 @@ const distinct = (params) =>
     }
   };
 
-const listFilter = (params) => async (req, res) => {
+const listFilter = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection } = params;
+  const { Database, Collection, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const db = req.database;
@@ -1295,7 +1273,7 @@ const listFilter = (params) => async (req, res) => {
         : {}),
     },
   };
-  console.log(JSON.stringify(exampleQuerie, null, 4));
+  // console.log(JSON.stringify(exampleQuerie, null, 4));
   const AggregationMongo = [
     ...LookUpBuilder,
     exampleQuerie,
@@ -1317,7 +1295,7 @@ const listFilter = (params) => async (req, res) => {
         ]
       : []),
   ];
-  // console.log(JSON.stringify(AggregationMongo, null, 4));
+  console.log(JSON.stringify(AggregationMongo, null, 4));
 
   try {
     console.log(page);
@@ -1344,6 +1322,10 @@ const listFilter = (params) => async (req, res) => {
             }
           : dbResponse,
     };
+    if (Middleware) {
+      req.Response = objResp;
+      return next();
+    }
     res.status(200).send(objResp);
   } catch (err) {
     console.log(err);
@@ -1356,9 +1338,9 @@ const listFilter = (params) => async (req, res) => {
   }
 };
 
-const pullIdFromArrayManagementDB = (params) => async (req, res) => {
+const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection } = params;
+  const { Database, Collection, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
 
@@ -1382,6 +1364,10 @@ const pullIdFromArrayManagementDB = (params) => async (req, res) => {
     message: "completed",
     data: Result,
   };
+  if (Middleware) {
+    req.Response = objResp;
+    return next();
+  }
   res.status(200).send(objResp);
 };
 
