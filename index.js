@@ -1384,7 +1384,6 @@ module.exports = (mongoWraperEasyClient) => {
     docRemove: docRemove,
     docUpload: docUpload,
     distinct: distinct,
-    uploadDocument: uploadDocument,
     remove: remove,
     updatePatch: updatePatch,
     create: create,
