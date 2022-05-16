@@ -218,7 +218,7 @@ const list = (params) => async (req, res, next) => {
         data: acople,
       };
       if (Middleware) {
-        req.Response = objResp;
+        req.MidResponse = objResp;
         return next();
       }
       res.status(200).send(objResp);
@@ -292,7 +292,7 @@ const listOne = (params) => async (req, res, next) => {
       data: dbResponse == null ? {} : dbResponse,
     };
     if (Middleware) {
-      req.Response = objResp;
+      req.MidResponse = objResp;
       return next();
     }
     res.status(200).send(objResp);
@@ -413,7 +413,7 @@ const create = (params) => async (req, res, next) => {
     extra: req.extraresponse,
   };
   if (Middleware) {
-    req.Response = objResp;
+    req.MidResponse = objResp;
     return next();
   }
   res.status(200).send(objResp);
@@ -490,7 +490,7 @@ const updatePatch = (params) => async (req, res, next) => {
     data: dbResponse,
   };
   if (Middleware) {
-    req.Response = objResp;
+    req.MidResponse = objResp;
     return next();
   }
   res.status(200).send(objResp);
@@ -515,7 +515,7 @@ const remove = (params) => async (req, res, next) => {
       data: dbResponse,
     };
     if (Middleware) {
-      req.Response = objResp;
+      req.MidResponse = objResp;
       return next();
     }
     res.status(200).send(objResp);
@@ -610,7 +610,7 @@ const docUpload = (params) => async (req, res, next) => {
         data: dbFind,
       };
       if (Middleware) {
-        req.Response = objResp;
+        req.MidResponse = objResp;
         return next();
       }
       res.status(200).send(objResp);
@@ -669,7 +669,7 @@ const docRemove = (params) => async (req, res, next) => {
         data: lastFind,
       };
       if (Middleware) {
-        req.Response = objResp;
+        req.MidResponse = objResp;
         return next();
       }
       res.status(200).send(objResp);
@@ -852,7 +852,7 @@ const uploadAdd = (params) => async (req, res, next) => {
         data: docSubcontratista2,
       };
       if (Middleware) {
-        req.Response = objResp;
+        req.MidResponse = objResp;
         return next();
       }
       res.status(200).send(objResp);
@@ -963,7 +963,7 @@ const uploadPatch = (params) => async (req, res, next) => {
           data: docSubcontratista,
         };
         if (Middleware) {
-          req.Response = objResp;
+          req.MidResponse = objResp;
           return next();
         }
         res.status(200).send(objResp);
@@ -1044,7 +1044,7 @@ const uploadRemove = (params) => async (req, res, next) => {
       data: newDocuments,
     };
     if (Middleware) {
-      req.Response = objResp;
+      req.MidResponse = objResp;
       return next();
     }
     res.status(200).send(objResp);
@@ -1080,7 +1080,7 @@ const distinct = (params) =>
         data: dbResponse == null ? {} : dbResponse,
       };
       if (Middleware) {
-        req.Response = objResp;
+        req.MidResponse = objResp;
         return next();
       }
       res.status(200).send(objResp);
@@ -1323,7 +1323,7 @@ const listFilter = (params) => async (req, res, next) => {
           : dbResponse,
     };
     if (Middleware) {
-      req.Response = objResp;
+      req.MidResponse = objResp;
       return next();
     }
     res.status(200).send(objResp);
@@ -1365,7 +1365,7 @@ const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
     data: Result,
   };
   if (Middleware) {
-    req.Response = objResp;
+    req.MidResponse = objResp;
     return next();
   }
   res.status(200).send(objResp);
