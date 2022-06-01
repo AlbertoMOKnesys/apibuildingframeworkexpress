@@ -3,7 +3,7 @@ const MongoWraper = require("mongoclienteasywrapper")(process.env.MONGO_URI);
 const { sizeObj } = require("../helpers/common");
 const ObjectId = require("mongodb").ObjectID;
 
-exports.Assing = async (body, db0, db1) => {
+exports.Assign = async (body, db0, db1) => {
   const collection = Object.keys(body);
   console.log(collection);
   console.log({ [collection[1] + "_id"]: { $each: body[collection[1]] } });
@@ -33,8 +33,39 @@ exports.Assing = async (body, db0, db1) => {
 
   return;
 };
+
+exports.UnAssing = async (body, db0, db1) => {
+  const collection = Object.keys(body);
+  console.log(collection);
+  console.log({ [collection[1] + "_id"]: { $in: body[collection[1]] } });
+  const PullFirstCollection = await MongoWraper.UpdateMongoManyBy_idPull(
+    body[collection[0]],
+    {
+      [collection[1] + "_id"]: {
+        $in: body[collection[1]].map((e) => ObjectId(e)),
+      },
+    },
+    collection[0],
+    db0
+  );
+  // console.log(PushFirstCollection);
+  const PullSecondCollection = await MongoWraper.UpdateMongoManyBy_idPull(
+    body[collection[1]],
+    {
+      [collection[0] + "_id"]: {
+        $in: body[collection[0]].map((e) => ObjectId(e)),
+      },
+    },
+    collection[1],
+    db1
+  );
+
+  // console.log(PushSecondCollection);
+
+  return;
+};
 exports.addnew = async (req, res) => {
-  await this.Assing(req.body, req.database, req.database);
+  await this.Assign(req.body, req.database, req.database);
   const objResp = {
     status: "ok",
     message: "completed",

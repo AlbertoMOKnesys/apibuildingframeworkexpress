@@ -9,11 +9,17 @@ const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
 const Oculta = { oculta: { $ne: true } };
 
-const Assing = async (body, db0, db1) => {
+const Assign = async (body, db0, db1) => {
   const collection = Object.keys(body);
   console.log(collection);
+  //   {
+  //     "asistencias": ["61f801cdb6153a0034c123ec"]
+  // collection:[id]
+  //   }
+
   console.log({ [collection[1] + "_id"]: { $each: body[collection[1]] } });
   const PushFirstCollection = await MongoWraper.UpdateMongoManyBy_idAddToSet(
+    // ["61f801cdb6153a0034c123ec"]
     body[collection[0]],
     {
       [collection[1] + "_id"]: {
@@ -29,6 +35,37 @@ const Assing = async (body, db0, db1) => {
     {
       [collection[0] + "_id"]: {
         $each: body[collection[0]].map((e) => ObjectId(e)),
+      },
+    },
+    collection[1],
+    db1
+  );
+
+  // console.log(PushSecondCollection);
+
+  return;
+};
+
+const UnAssign = async (body, db0, db1) => {
+  const collection = Object.keys(body);
+  console.log(collection);
+  console.log({ [collection[1] + "_id"]: { $in: body[collection[1]] } });
+  const PullFirstCollection = await MongoWraper.UpdateMongoManyBy_idPull(
+    body[collection[0]],
+    {
+      [collection[1] + "_id"]: {
+        $in: body[collection[1]].map((e) => ObjectId(e)),
+      },
+    },
+    collection[0],
+    db0
+  );
+  // console.log(PushFirstCollection);
+  const PullSecondCollection = await MongoWraper.UpdateMongoManyBy_idPull(
+    body[collection[1]],
+    {
+      [collection[0] + "_id"]: {
+        $in: body[collection[0]].map((e) => ObjectId(e)),
       },
     },
     collection[1],
@@ -357,12 +394,21 @@ const create = (params) => async (req, res, next) => {
 
   //codigo nuevo para asignar al momento de insertar
   //agregando id de lo que acabamos de insertar a la asignacion
+  // "_Assign": [
+  //   {
+  //     "asistencias": ["61f801cdb6153a0034c123ec"]
+  //   }
+  // ]
   Asignaciones = Asignaciones.map((e) => {
+    //   {
+    //     "asistencias": ["61f801cdb6153a0034c123ec"]
+    // collection:[id]
+    //   }
     return { ...e, [collection]: [dbResponse.insertedId] };
   });
   //
 
-  const PromisesAssign = Asignaciones.map((e) => Assing(e, db, db));
+  const PromisesAssign = Asignaciones.map((e) => Assign(e, db, db));
 
   await Promise.all(PromisesAssign);
 
@@ -438,6 +484,17 @@ const updatePatch = (params) => async (req, res, next) => {
   // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   // const Db = Database ? Database : req.database;
 
+  //Guadando asignaciones para que no se inserten junto con el body
+  let Asignaciones = req.body.hasOwnProperty("_Assign") ? req.body._Assign : [];
+
+  delete req.body._Assign;
+
+  let DesAsignaciones = req.body.hasOwnProperty("_UnAssign")
+    ? req.body._UnAssign
+    : [];
+
+  delete req.body._UnAssign;
+
   let dbResponse;
   try {
     dbResponse = await MongoWraper.UpdateMongoBy_id(
@@ -455,6 +512,33 @@ const updatePatch = (params) => async (req, res, next) => {
       err
     );
   }
+
+  Asignaciones = Asignaciones.map((e) => {
+    //   {
+    //     "asistencias": ["61f801cdb6153a0034c123ec"]
+    // collection:[id]
+    //   }
+    return { ...e, [collection]: [req.params._id] };
+  });
+  //
+
+  const PromisesAssign = Asignaciones.map((e) => Assign(e, db, db));
+
+  await Promise.all(PromisesAssign);
+
+  DesAsignaciones = DesAsignaciones.map((e) => {
+    //   {
+    //     "asistencias": ["61f801cdb6153a0034c123ec"]
+    // collection:[id]
+    //   }
+    return { ...e, [collection]: [req.params._id] };
+  });
+  //
+
+  const PromisesUnAssign = DesAsignaciones.map((e) => UnAssign(e, db, db));
+
+  await Promise.all(PromisesUnAssign);
+
   //ejecutando funcion extra si es requerido
   if (AsyncFunctionAfter) {
     await AsyncFunctionAfter(req, res, dbResponse);
