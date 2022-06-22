@@ -1,5 +1,6 @@
 const { sizeObj } = require("./common");
-const ObjectId = require("mongodb").ObjectID;
+// const ObjectId = require("mongodb").ObjectID;
+const ObjectId = require("mongodb").ObjectId;
 const fs = require("fs");
 const uploadfileDatos = require("./uploadFileData");
 // const { ipServer } = require("../config/vars");
@@ -73,6 +74,19 @@ const UnAssign = async (body, db0, db1) => {
   );
 
   // console.log(PushSecondCollection);
+
+  return;
+};
+const UnAssignIdToCollections = async (collection, field, id, db) => {
+  // console.log("col", collection);
+  // console.log("fie", field);
+  // console.log("id", id);
+  const PullCollection =
+    await MongoWraper.UpdateMongoManyPullIDToCollectionPull(
+      { [field + "_id"]: ObjectId(id) },
+      collection,
+      db
+    );
 
   return;
 };
@@ -343,6 +357,121 @@ const listOne = (params) => async (req, res, next) => {
   }
 };
 
+const createMultipleCore = (params) => async (req, res, next) => {
+  params = params ? params : {};
+  const {
+    Database,
+    Collection,
+    PathBaseFile,
+    URL,
+    ApiErrorFailDb,
+    AsyncFunctionAfter,
+    Middleware,
+  } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Database ? Database : req.database;
+
+  // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  // const Db = Database ? Database : req.database;
+
+  //codigo nuevo para asignar al momento de insertar
+
+  const objToSave = { ...req.body, datetime: new Date() };
+  console.log(objToSave);
+  //Guadando asignaciones para que no se inserten junto con el body
+  let Asignaciones = req.body.hasOwnProperty("_Assign") ? req.body._Assign : [];
+
+  delete req.body._Assign;
+
+  //Insertando en DB\
+  console.log("llego hasta acaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+  console.log(req.body);
+  let dbResponse;
+  try {
+    dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, db);
+  } catch (err) {
+    console.log(err);
+
+    throw new ApiErrorData(
+      400,
+      ApiErrorFailDb ? ApiErrorFailDb : "db error",
+      err
+    );
+  }
+
+  //codigo nuevo para asignar al momento de insertar
+  //agregando id de lo que acabamos de insertar a la asignacion
+  // "_Assign": [
+  //   {
+  //     "asistencias": ["61f801cdb6153a0034c123ec"]
+  //   }
+  // ]
+  Asignaciones = Asignaciones.map((e) => {
+    //   {
+    //     "asistencias": ["61f801cdb6153a0034c123ec"]
+    // collection:[id]
+    //   }
+    return { ...e, [collection]: [dbResponse.insertedId] };
+  });
+  //
+
+  const PromisesAssign = Asignaciones.map((e) => Assign(e, db, db));
+
+  await Promise.all(PromisesAssign);
+
+  //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
+  if (req.files) {
+    // const dirDestino = `${__basedir}/files/${Db}/${collection}/${dbResponse.insertedId}/`;
+    const dirDestino = `${PathBaseFile}/${db}/${collection}/${dbResponse.insertedId}/`;
+    if (!fs.existsSync(dirDestino)) {
+      fs.mkdirSync(dirDestino, { recursive: true });
+    }
+    const fotofile = req.files.file[0];
+    const pathDestino = dirDestino + fotofile.filename;
+    fs.renameSync(fotofile.path, pathDestino);
+    //actualizando el directorio al que se movio
+
+    // const foto = `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
+    const foto = `${URL}/${db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
+    await MongoWraper.UpdateMongoBy_id(
+      dbResponse.insertedId,
+      {
+        foto: foto,
+        fotopath: pathDestino,
+      },
+      collection,
+      db
+    );
+
+    req.body.foto = foto;
+    req.body.fotopath = pathDestino;
+  }
+
+  const dbResponseFind = await MongoWraper.FindOne(
+    dbResponse.insertedId,
+    collection,
+    db
+  );
+
+  if (AsyncFunctionAfter) {
+    await AsyncFunctionAfter(req, res, dbResponse);
+  }
+
+  //TODO regresar en la respuesta si las asignaciones fueron correctas
+
+  const objResp = {
+    status: "ok",
+    message: "completed",
+    data: dbResponseFind,
+    extra: req.extraresponse,
+  };
+  if (Middleware) {
+    req.MidResponse = objResp;
+    return next();
+  }
+  return objResp;
+};
+
 const create = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -362,13 +491,6 @@ const create = (params) => async (req, res, next) => {
 
   //codigo nuevo para asignar al momento de insertar
 
-  req.body = Object.keys(req.body).reduce((acum, property) => {
-    if (property.includes("_datetime")) {
-      return { ...acum, [property]: new Date(req.body[property]) };
-    } else {
-      return { ...acum, [property]: req.body[property] };
-    }
-  }, {});
   const objToSave = { ...req.body, datetime: new Date() };
   console.log(objToSave);
   //Guadando asignaciones para que no se inserten junto con el body
@@ -467,6 +589,7 @@ const create = (params) => async (req, res, next) => {
   // .status(200)
   // .send({ status: "ok", message: "face indexed", data: percentageUpdate });
 };
+
 const updatePatch = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -586,6 +709,14 @@ const remove = (params) => async (req, res, next) => {
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match(re)[0];
+  console.log("entre a remove");
+
+  let Desasignaciones = req.body.hasOwnProperty("_Unassign")
+    ? req.body._Unassign
+    : [];
+  console.log(Desasignaciones);
+  delete req.body._Unassign;
+
   try {
     const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
       req.params._id,
@@ -598,6 +729,22 @@ const remove = (params) => async (req, res, next) => {
       message: "completed",
       data: dbResponse,
     };
+
+    // Desasignaciones = Desasignaciones.map((e) => {
+    //   //   {
+    //   //     "asistencias": ["61f801cdb6153a0034c123ec"]
+    //   // collection:[id]
+    //   //   }
+    //   return { ...e, [collection]: [dbResponse.insertedId] };
+    // });
+    // //
+
+    const PromisesAssign = Desasignaciones.map((collectionDelete) =>
+      UnAssignIdToCollections(collectionDelete, collection, req.params._id, db)
+    );
+
+    await Promise.all(PromisesAssign);
+
     if (Middleware) {
       req.MidResponse = objResp;
       return next();
@@ -1265,6 +1412,19 @@ const listFilter = (params) => async (req, res, next) => {
     GetGenericQueryString(e)
   );
 
+  const IntegerQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_integer"))
+    .map((e) => {
+      return {
+        Property: e.replace("_integer", ""),
+        Search: parseInt(req.query[e]),
+      };
+    });
+
+  const IntegerMongoQueries = IntegerQueriesBuilder.map((e) =>
+    GetGenericQueryString(e)
+  );
+
   const IdQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_id"))
     .map((e) => {
@@ -1341,10 +1501,12 @@ const listFilter = (params) => async (req, res, next) => {
       NeidMongoQueries.length > 0 ||
       NestringMongoQueries.length > 0 ||
       StringtMongoQueries.length > 0 ||
+      IntegerQueriesBuilder.length > 0 ||
       QueryDate.length > 0
         ? {
             $and: [
               ...StringtMongoQueries,
+              ...IntegerQueriesBuilder,
               ...IdMongoQueries,
               ...NeidMongoQueries,
               ...NestringMongoQueries,
