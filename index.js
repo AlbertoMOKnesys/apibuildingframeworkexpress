@@ -1521,8 +1521,8 @@ const listFilter = (params) => async (req, res, next) => {
   };
   // console.log(JSON.stringify(exampleQuerie, null, 4));
   const AggregationMongo = [
-    ...LookUpBuilder,
     exampleQuerie,
+    ...LookUpBuilder,
     ...(Object.keys(ProjectMongo).length > 0
       ? [{ $project: ProjectMongo }]
       : []),
