@@ -1,7 +1,7 @@
 const { ObjectId } = require("mongodb");
 
 const MongoWraper = require("mongoclienteasywrapper")(
-  "mongodb://knesys:knesysiot123@localhost:27018"
+  "mongodb://knesys:knesysiot123@localhost:27017"
 );
 
 const apibuildingframeworkexpress = require("apibuildingframeworkexpress")(
@@ -24,8 +24,8 @@ app.get("/", (req, res) => {
 app.delete(
   "/:_id/delete",
   apibuildingframeworkexpress.remove({
-    Database: "EMPRESAPACHUCA719481",
-    Collection: "eventos",
+    Database: "EMPRESAGUSTAVO8501348",
+    Collection: "proyectos",
   })
 );
 
@@ -35,11 +35,14 @@ app.listen(port, () => {
 
 const test = async () => {
   //   apibuildingframeworkexpress.remove()((req, res, next));
-  const IdToDelete = "62b26994108bf4fd0355c198";
+  const IdToDelete = "627d7c68c8cc781a0f281222";
   //   Unlike axios.post() and axios.put(), the 2nd param to axios.delete() is the Axios options, not the request body. To send a request body with a DELETE request, you should use the data option.
   axios
     .delete("http://localhost:3000/" + IdToDelete + "/delete", {
-      data: { _Unassign: ["torneos"] },
+      data: {
+        _Unassign: ["subcontratistas"],
+        _RecursiveDelete: ["subcontratistas"],
+      },
     })
     .then(function (response) {
       // handle success
