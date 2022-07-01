@@ -717,6 +717,12 @@ const remove = (params) => async (req, res, next) => {
   console.log(Desasignaciones);
   delete req.body._Unassign;
 
+  let RecursiveDelete = req.body.hasOwnProperty("_RecursiveDelete")
+    ? req.body._RecursiveDelete
+    : [];
+  console.log(RecursiveDelete);
+  delete req.body._RecursiveDelete;
+
   try {
     const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
       req.params._id,
@@ -730,6 +736,15 @@ const remove = (params) => async (req, res, next) => {
       data: dbResponse,
     };
 
+    const PromisesRecursiveDelete = RecursiveDelete.map((collectionDelete) =>
+      MongoWraper.UpdateMongoMany(
+        { [collection + "_id"]: req.params._id },
+        { status: "deleted" },
+        collectionDelete,
+        db
+      )
+    );
+    await Promise.all(PromisesRecursiveDelete);
     // Desasignaciones = Desasignaciones.map((e) => {
     //   //   {
     //   //     "asistencias": ["61f801cdb6153a0034c123ec"]
@@ -739,11 +754,11 @@ const remove = (params) => async (req, res, next) => {
     // });
     // //
 
-    const PromisesAssign = Desasignaciones.map((collectionDelete) =>
+    const PromisesUnAssign = Desasignaciones.map((collectionDelete) =>
       UnAssignIdToCollections(collectionDelete, collection, req.params._id, db)
     );
 
-    await Promise.all(PromisesAssign);
+    await Promise.all(PromisesUnAssign);
 
     if (Middleware) {
       req.MidResponse = objResp;
