@@ -17,9 +17,13 @@ const port = 3000;
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(bodyParser.json({ limit: "100mb" }));
 
-app.get("/", (req, res) => {
-  res.send("Hello World!");
-});
+app.get(
+  "/",
+  apibuildingframeworkexpress.listFilter({
+    Database: "EMPRESAGUSTAVO8501348",
+    Collection: "historial",
+  })
+);
 //Remove Test
 app.delete(
   "/:_id/delete",
@@ -68,4 +72,24 @@ const test = async () => {
   //     });
   console.log("test");
 };
-test();
+
+const testListfilter = async () => {
+  axios
+    .get("http://localhost:3000/", {
+      params: { abuelita_concat: `[ "$Collection", " ", "$Action" ]` },
+    })
+    .then(function (response) {
+      // handle success
+      console.log("200");
+      console.log(response.data);
+    })
+    .catch(function (error) {
+      // handle error
+      console.log("catch");
+      console.log(error.response.status);
+    });
+
+  console.log("test");
+};
+// test();
+testListfilter();

@@ -1375,6 +1375,16 @@ const listFilter = (params) => async (req, res, next) => {
       ProjectMongo = { [req.query.projectMongo]: true };
     }
   }
+  // seccion para concatenado
+
+  const ConcatName = Object.keys(req.query)
+    .filter((e) => e.includes("_concat"))
+    .reduce((acum, e) => e.replace("_concat", ""), "");
+  console.log(`nombre concatenado ${ConcatName}`);
+  var ConcatMongo = null;
+  if (ConcatName) {
+    ConcatMongo = JSON.parse(req.query[ConcatName + "_concat"]);
+  }
   //Seccion para ordenar todo segun lo requiera el usuario
   var SortMongoAsc = {};
   if (req.query.hasOwnProperty("sortMongoAsc")) {
@@ -1544,7 +1554,12 @@ const listFilter = (params) => async (req, res, next) => {
     },
   };
   // console.log(JSON.stringify(exampleQuerie, null, 4));
+
+  // $project: { "name" : { $concat : [ "$firstName", " ", "$lastName" ] } },
   const AggregationMongo = [
+    ...(ConcatMongo
+      ? [{ $addFields: { [ConcatName]: { $concat: ConcatMongo } } }]
+      : []),
     exampleQuerie,
     ...LookUpBuilder,
     ...(Object.keys(ProjectMongo).length > 0
