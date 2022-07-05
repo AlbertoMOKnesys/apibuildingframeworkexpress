@@ -1006,8 +1006,17 @@ const docRemove = (params) => async (req, res, next) => {
 //Agrega Docuemento
 const uploadAdd = (params) => async (req, res, next) => {
   params = params ? params : {};
-  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
+  const {
+    Database,
+    Collection,
+    PropertyNameFile,
+    PathBaseFile,
+    URL,
+    Middleware,
+  } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const propertyNameFile = PropertyNameFile ? PropertyNameFile : "documentos";
+
   const db = Database ? Database : req.database;
   //   const collection = req.originalUrl.match
   //   const collection = req.originalUrl.match(re)[0];
@@ -1060,7 +1069,7 @@ const uploadAdd = (params) => async (req, res, next) => {
       /// parseando datos que vengan como json dentro de form-data    ############################################
       const body = JSON.parse(req.body.data);
       const docTopush = {
-        documentos: {
+        [propertyNameFile]: {
           //   file: `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
           file: `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
           filepath: pathDestino,
