@@ -1516,7 +1516,7 @@ const listFilter = (params) => async (req, res, next) => {
       NeidMongoQueries.length > 0 ||
       NestringMongoQueries.length > 0 ||
       StringtMongoQueries.length > 0 ||
-      IntegerQueriesBuilder.length > 0 ||
+      IntegerMongoQueries.length > 0 ||
       QueryDate.length > 0
         ? {
             $and: [
