@@ -1540,7 +1540,7 @@ const listFilter = (params) => async (req, res, next) => {
         ? {
             $and: [
               ...StringtMongoQueries,
-              ...IntegerQueriesBuilder,
+              ...IntegerMongoQueries,
               ...IdMongoQueries,
               ...NeidMongoQueries,
               ...NestringMongoQueries,
