@@ -702,7 +702,54 @@ const updatePatch = (params) => async (req, res, next) => {
   }
   res.status(200).send(objResp);
 };
+const updatePatchMany = (params) => async (req, res, next) => {
+  params = params ? params : {};
+  const {
+    Database,
+    Collection,
+    PathBaseFile,
+    URL,
+    ApiErrorFailDb,
+    AsyncFunctionAfter,
+    Middleware,
+  } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Database ? Database : req.database;
 
+  // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  // const Db = Database ? Database : req.database;
+
+  //Guadando asignaciones para que no se inserten junto con el body
+
+  let dbResponse;
+  try {
+    dbResponse = await MongoWraper.UpdateMongoMany(
+      req.body.query,
+      req.body.newProperties,
+      collection,
+      db
+    );
+  } catch (err) {
+    console.log(err);
+
+    throw new ApiErrorData(
+      400,
+      ApiErrorFailDb ? ApiErrorFailDb : "db error",
+      err
+    );
+  }
+
+  const objResp = {
+    status: "ok",
+    message: "completed",
+    data: dbResponse,
+  };
+  if (Middleware) {
+    req.MidResponse = objResp;
+    return next();
+  }
+  res.status(200).send(objResp);
+};
 const remove = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
@@ -1671,6 +1718,7 @@ module.exports = (mongoWraperEasyClient) => {
     distinct: distinct,
     remove: remove,
     updatePatch: updatePatch,
+    updatePatchMany: updatePatchMany,
     create: create,
     listOne: listOne,
     list: list,
