@@ -136,6 +136,22 @@ const GetGenericQueryId = (Query) => {
     return { $or: [...QuerySpecific] };
   }
 };
+const GetGenericQueryBool = (Query) => {
+  // const ReqQuery = { Search: req.query.ObrasId };
+  if (Array.isArray(Query.Search)) {
+    const QueriesArrProp = Query.Search.reduce((acum, ArrSearch) => {
+      const QuerySpecific = [{ [Query.Property]: ArrSearch == "true" }];
+      return [...acum, ...QuerySpecific];
+    }, []);
+    //console.log(QueriesArrProp);
+
+    //[{ $or: [...QueriesArrProp] }];
+    return { $or: [...QueriesArrProp] };
+  } else {
+    const QuerySpecific = [{ [Query.Property]: Query.Search == "true" }];
+    return { $or: [...QuerySpecific] };
+  }
+};
 const GetGenericQueryString = (Query) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -1513,6 +1529,20 @@ const listFilter = (params) => async (req, res, next) => {
     });
 
   const IdMongoQueries = IdQueriesBuilder.map((e) => GetGenericQueryId(e));
+
+  const BoolQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_boolean"))
+    .map((e) => {
+      return {
+        Property: e.replace("_boolean", ""),
+        Search: req.query[e],
+      };
+    });
+
+  const BoolMongoQueries = BoolQueriesBuilder.map((e) =>
+    GetGenericQueryBool(e)
+  );
+
   // [{"$or":[{"proyectos_id":"61a795d36444930053e0c56d"},{"proyectos_id":"61a804ea67caea3647707d6b"}]}]
   // console.log(JSON.stringify(IdMongoQueries));
 
@@ -1579,6 +1609,7 @@ const listFilter = (params) => async (req, res, next) => {
       // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
       ...(IdMongoQueries.length > 0 ||
       PartialQueriesBuilder.length > 0 ||
+      BoolMongoQueries.length > 0 ||
       NeidMongoQueries.length > 0 ||
       NestringMongoQueries.length > 0 ||
       StringtMongoQueries.length > 0 ||
@@ -1588,6 +1619,7 @@ const listFilter = (params) => async (req, res, next) => {
             $and: [
               ...StringtMongoQueries,
               ...IntegerMongoQueries,
+              ...BoolMongoQueries,
               ...IdMongoQueries,
               ...NeidMongoQueries,
               ...NestringMongoQueries,
