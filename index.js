@@ -1650,6 +1650,29 @@ const listFilter = (params) => async (req, res, next) => {
           {
             $facet: {
               Total: [{ $count: "Total" }],
+              Metadata: [
+                { $count: "Total" },
+                {
+                  $addFields: {
+                    Page: page,
+                    Limit: limit,
+                  },
+                },
+                {
+                  $addFields: {
+                    // div: {
+                    //   $divide: ["$Total", page == 0 ? limit * 1 : limit * page],
+                    // },
+                    Hasmore: {
+                      $gt: [
+                        { $ceil: { $divide: ["$Total", "$Limit"] } },
+                        "$Page",
+                      ],
+                    },
+                  },
+                },
+              ],
+
               Results: [
                 { $skip: page > 0 ? page * limit : 0 },
                 { $limit: limit },
@@ -1658,6 +1681,7 @@ const listFilter = (params) => async (req, res, next) => {
           },
         ]
       : []),
+    { $unwind: { path: "$Metadata" } },
   ];
   console.log(JSON.stringify(AggregationMongo, null, 4));
 

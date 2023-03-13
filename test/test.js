@@ -1,7 +1,7 @@
 const { ObjectId } = require("mongodb");
 
 const MongoWraper = require("mongoclienteasywrapper")(
-  "mongodb://knesys:knesysiot123@localhost:27017"
+  "mongodb://knesys:knesysiot123@143.255.56.244:27017"
 );
 
 const apibuildingframeworkexpress = require("apibuildingframeworkexpress")(
@@ -20,16 +20,16 @@ app.use(bodyParser.json({ limit: "100mb" }));
 app.get(
   "/",
   apibuildingframeworkexpress.listFilter({
-    Database: "EMPRESAGUSTAVO8501348",
-    Collection: "historial",
+    Database: "Demek930165",
+    Collection: "asistencias",
   })
 );
 //Remove Test
 app.delete(
   "/:_id/delete",
   apibuildingframeworkexpress.remove({
-    Database: "EMPRESAGUSTAVO8501348",
-    Collection: "proyectos",
+    Database: "Demek930165",
+    Collection: "ty",
   })
 );
 
@@ -76,12 +76,13 @@ const test = async () => {
 const testListfilter = async () => {
   axios
     .get("http://localhost:3000/", {
-      params: { abuelita_concat: `[ "$Collection", " ", "$Action" ]` },
+      params: { limit: 11, page: 1000 },
     })
     .then(function (response) {
       // handle success
       console.log("200");
       console.log(response.data);
+      console.log(response.data.data.Metadata);
     })
     .catch(function (error) {
       // handle error
