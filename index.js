@@ -1664,9 +1664,14 @@ const listFilter = (params) => async (req, res, next) => {
                     //   $divide: ["$Total", page == 0 ? limit * 1 : limit * page],
                     // },
                     Hasmore: {
-                      $gt: [
-                        { $ceil: { $divide: ["$Total", "$Limit"] } },
-                        "$Page",
+                      $gte: [
+                        {
+                          $divide: [
+                            "$Total",
+                            page == 0 ? limit * 1 : limit * page,
+                          ],
+                        },
+                        1,
                       ],
                     },
                   },
