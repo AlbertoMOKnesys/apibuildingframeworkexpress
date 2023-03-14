@@ -1664,12 +1664,9 @@ const listFilter = (params) => async (req, res, next) => {
                     //   $divide: ["$Total", page == 0 ? limit * 1 : limit * page],
                     // },
                     Hasmore: {
-                      $gte: [
+                      $gt: [
                         {
-                          $divide: [
-                            "$Total",
-                            page == 0 ? limit * 1 : limit * page,
-                          ],
+                          $divide: ["$Total", limit * (page + 1)],
                         },
                         1,
                       ],
@@ -1686,7 +1683,7 @@ const listFilter = (params) => async (req, res, next) => {
           },
         ]
       : []),
-    { $unwind: { path: "$Metadata" } },
+    ...(limit > 0 ? [{ $unwind: { path: "$Metadata" } }] : []),
   ];
   console.log(JSON.stringify(AggregationMongo, null, 4));
 

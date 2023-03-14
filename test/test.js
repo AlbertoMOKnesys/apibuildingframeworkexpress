@@ -21,7 +21,7 @@ app.get(
   "/",
   apibuildingframeworkexpress.listFilter({
     Database: "Demek930165",
-    Collection: "asistencias",
+    Collection: "projects",
   })
 );
 //Remove Test
