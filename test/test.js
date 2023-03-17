@@ -12,7 +12,7 @@ const axios = require("axios");
 const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
-const port = 3000;
+const port = 3001;
 
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 app.use(bodyParser.json({ limit: "100mb" }));
@@ -21,7 +21,7 @@ app.get(
   "/",
   apibuildingframeworkexpress.listFilter({
     Database: "Demek930165",
-    Collection: "projects",
+    Collection: "asistencias",
   })
 );
 //Remove Test
@@ -75,8 +75,12 @@ const test = async () => {
 
 const testListfilter = async () => {
   axios
-    .get("http://localhost:3000/", {
-      params: { limit: 11, page: 1000 },
+    .get("http://localhost:3001/", {
+      params: {
+        limit: 10,
+        page: 0,
+        trabajadores_nombre_string: "Alberto",
+      },
     })
     .then(function (response) {
       // handle success

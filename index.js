@@ -1650,6 +1650,10 @@ const listFilter = (params) => async (req, res, next) => {
           {
             $facet: {
               Total: [{ $count: "Total" }],
+              Results: [
+                { $skip: page > 0 ? page * limit : 0 },
+                { $limit: limit },
+              ],
               Metadata: [
                 { $count: "Total" },
                 {
@@ -1674,16 +1678,11 @@ const listFilter = (params) => async (req, res, next) => {
                   },
                 },
               ],
-
-              Results: [
-                { $skip: page > 0 ? page * limit : 0 },
-                { $limit: limit },
-              ],
             },
           },
         ]
       : []),
-    ...(limit > 0 ? [{ $unwind: { path: "$Metadata" } }] : []),
+    // ...(limit > 0 ? [{ $unwind: { path: "$Metadata" } }] : []),
   ];
   console.log(JSON.stringify(AggregationMongo, null, 4));
 
@@ -1701,6 +1700,7 @@ const listFilter = (params) => async (req, res, next) => {
     const objResp = {
       status: "ok",
       message: "completed",
+      // data: dbResponse,
       data:
         limit > 0
           ? {
@@ -1709,6 +1709,10 @@ const listFilter = (params) => async (req, res, next) => {
                 dbResponse[0].Total.length > 0
                   ? dbResponse[0].Total[0].Total
                   : 0,
+              Metadata:
+                dbResponse[0].Total.length > 0
+                  ? dbResponse[0].Metadata[0]
+                  : { Hasmore: false, Limit: limit, Page: page },
             }
           : dbResponse,
     };
