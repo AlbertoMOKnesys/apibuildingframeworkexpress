@@ -1,6 +1,6 @@
 {
   "name": "apibuildingframeworkexpress",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "fast api building over express",
   "main": "index.js",
   "scripts": {

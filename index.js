@@ -1509,6 +1509,17 @@ const listFilter = (params) => async (req, res, next) => {
     GetGenericQueryString(e)
   );
 
+  //after string
+  const StringAfterQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_stringAfter"))
+    .map((e) => {
+      return { Property: e.replace("_stringAfter", ""), Search: req.query[e] };
+    });
+
+  const StringAftertMongoQueries = StringAfterQueriesBuilder.map((e) =>
+    GetGenericQueryString(e)
+  );
+
   const IntegerQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_integer"))
     .map((e) => {
@@ -1554,6 +1565,17 @@ const listFilter = (params) => async (req, res, next) => {
 
   const PartialMongoQueries = {
     $or: PartialQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
+  };
+
+  //
+  const PartialAfterQueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_partialAfter"))
+    .map((e) => {
+      return { Property: e.replace("_partialAfter", ""), Search: req.query[e] };
+    });
+
+  const PartialAfterMongoQueries = {
+    $or: PartialAfterQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
   };
   // {"$or":[{"$and":[{"empresa":{"$regex":"Pab","$options":"si"}},{"empresa":{"$regex":"li","$options":"si"}}]},{"$and":[{"ciudad":{"$regex":"ag","$options":"si"}}]}]}
 
@@ -1632,6 +1654,22 @@ const listFilter = (params) => async (req, res, next) => {
         : {}),
     },
   };
+  const exampleQuerieAfter = {
+    $match: {
+      // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
+      ...(PartialAfterQueriesBuilder.length > 0 ||
+      StringAftertMongoQueries.length > 0
+        ? {
+            $and: [
+              ...StringAftertMongoQueries,
+              ...(PartialAfterQueriesBuilder.length > 0
+                ? [PartialAfterMongoQueries]
+                : []),
+            ],
+          }
+        : {}),
+    },
+  };
   // console.log(JSON.stringify(exampleQuerie, null, 4));
 
   // $project: { "name" : { $concat : [ "$firstName", " ", "$lastName" ] } },
@@ -1641,6 +1679,7 @@ const listFilter = (params) => async (req, res, next) => {
       : []),
     exampleQuerie,
     ...LookUpBuilder,
+    exampleQuerieAfter,
     ...(Object.keys(ProjectMongo).length > 0
       ? [{ $project: ProjectMongo }]
       : []),
