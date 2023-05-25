@@ -1511,9 +1511,9 @@ const listFilter = (params) => async (req, res, next) => {
 
   //after string
   const StringAfterQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_stringAfter"))
+    .filter((e) => e.includes("_afterString"))
     .map((e) => {
-      return { Property: e.replace("_stringAfter", ""), Search: req.query[e] };
+      return { Property: e.replace("_afterString", ""), Search: req.query[e] };
     });
 
   const StringAftertMongoQueries = StringAfterQueriesBuilder.map((e) =>
@@ -1569,9 +1569,9 @@ const listFilter = (params) => async (req, res, next) => {
 
   //
   const PartialAfterQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_partialAfter"))
+    .filter((e) => e.includes("_afterPartial"))
     .map((e) => {
-      return { Property: e.replace("_partialAfter", ""), Search: req.query[e] };
+      return { Property: e.replace("_afterPartial", ""), Search: req.query[e] };
     });
 
   const PartialAfterMongoQueries = {
