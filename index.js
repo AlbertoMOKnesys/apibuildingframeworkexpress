@@ -3,6 +3,7 @@ const { sizeObj } = require("./common");
 const ObjectId = require("mongodb").ObjectId;
 const fs = require("fs");
 const uploadfileDatos = require("./uploadFileData");
+const uploadfileDatosNew = require("./uploadFileDataNew");
 // const { ipServer } = require("../config/vars");
 const { ApiError, ApiErrorData } = require("./ApiError");
 const { nextTick } = require("process");
@@ -1065,7 +1066,170 @@ const docRemove = (params) => async (req, res, next) => {
   //   return res.status(400).send(objResp);
   // }
 };
+const fileUpload = (params) => async (req, res, next) => {
+  params = params ? params : {};
+  const {
+    Database,
+    Collection,
+    PropertyNameFile,
+    PathBaseFile,
+    URL,
+    Middleware,
+  } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const propertyNameFile = PropertyNameFile ? PropertyNameFile : "documentos";
+  const db = Database ? Database : req.database;
 
+  const dir = `${PathBaseFile}/${db}/tmp/`;
+  //   const collection = req.originalUrl.match
+  //   const collection = req.originalUrl.match(re)[0];
+  console.log("uploading files... " + collection);
+  //   const dir = __basedir + "/files/" + req.database + "/tmp/";
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  req.folder = dir;
+
+  try {
+    const DocumentUpload = await MongoWraper.FindIDOne(
+      req.params._id,
+      collection,
+      db
+    ).catch((err) => {
+      return null;
+    });
+    if (DocumentUpload == null) {
+      const objResp = {
+        status: "error",
+        message: "_id no econtrado",
+        data: {},
+      };
+      console.log(objResp);
+      return res.status(400).send(objResp);
+    }
+
+    await uploadfileDatosNew(req, res);
+
+    if (req.files === undefined) {
+      /// en caso de que no se este subiendo archivos del modo adecuado
+      let objResp = {
+        status: "error",
+        message: "Please upload a file!",
+        data: "",
+      };
+      return res.status(400).send(objResp);
+    }
+    // // moviendo archivo de temporal a la carpeta trabajador     ############################################
+    //   const dirDestino = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
+
+    const BodyParsed = JSON.parse(JSON.stringify(req.body));
+    const DocsArr = DoctObjBuilder(
+      req.files,
+      URL,
+      PathBaseFile,
+      db,
+      collection,
+      req.params._id,
+      BodyParsed
+    );
+
+    //   [propertyNameFile]: {
+    //     //   file: `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
+    //     file: `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
+    //     filepath: pathDestino,
+    //     datetime: new Date(),
+    //     ...body,
+    //   },
+    // };
+    const docTopush = {
+      [propertyNameFile]: {
+        $each: DocsArr,
+      },
+    };
+
+    await MongoWraper.UpdateMongoBy_idPush(
+      req.params._id,
+      docTopush,
+      collection,
+      db
+    ).catch((err) => {
+      const objResp = {
+        status: "error",
+        message: "db error",
+        data: err,
+      };
+      res.status(400).send(objResp);
+    });
+
+    const FinalObject = await MongoWraper.FindIDOne(
+      req.params._id,
+      collection,
+      db
+    ).catch((err) => {
+      return null;
+    });
+
+    const objResp = {
+      status: "ok",
+      message: "document added",
+      data: FinalObject,
+    };
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+    res.status(200).send(objResp);
+  } catch (err) {
+    /// en aso de que ocurra algun error en la subida de los archivos   ############################################
+    console.log(err);
+    const objResp = {
+      status: "error",
+      data: err,
+    };
+    if (err.code == "LIMIT_FILE_SIZE") {
+      objResp.message = "File size cannot be larger than 50MB!";
+      return res.status(400).send(objResp);
+    }
+    objResp.message = `Could not upload the file. ${err}`;
+    return res.status(400).send(objResp);
+  }
+};
+
+const DoctObjBuilder = (
+  files,
+  URL,
+  PathBaseFile,
+  db,
+  collection,
+  id,
+  bodyParsed
+) => {
+  const dirDestino = `${PathBaseFile}/${db}/${collection}/${id}/`;
+  return files.map((file) => {
+    const pathDestino = dirDestino + file.filename;
+    if (!fs.existsSync(dirDestino)) {
+      fs.mkdirSync(dirDestino, { recursive: true });
+    }
+    fs.renameSync(file.path, pathDestino);
+    return {
+      file: `${URL}/${db}/${collection}/${id}/${file.filename}`,
+      filepath: pathDestino,
+      datetime: new Date(),
+      ...(bodyParsed.hasOwnProperty("data_" + file.fieldname)
+        ? JSON.parse(bodyParsed["data_" + file.fieldname])
+        : {}),
+    };
+  });
+
+  // {
+  //   //   file: `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
+  //   file: `${URL}/${db}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
+  //   filepath: pathDestino,
+  //   datetime: new Date(),
+  //   ...body,
+  // }
+};
 //Agrega Docuemento
 const uploadAdd = (params) => async (req, res, next) => {
   params = params ? params : {};
@@ -1814,6 +1978,7 @@ module.exports = (mongoWraperEasyClient) => {
     uploadRemove: uploadRemove,
     uploadPatch: uploadPatch,
     uploadAdd: uploadAdd,
+    fileUpload: fileUpload,
     docRemove: docRemove,
     docUpload: docUpload,
     distinct: distinct,
