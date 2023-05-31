@@ -1124,7 +1124,7 @@ const fileUpload = (params) => async (req, res, next) => {
     //   const dirDestino = `${__basedir}/files/${req.database}/${collection}/${req.params._id}/`;
 
     const BodyParsed = JSON.parse(JSON.stringify(req.body));
-    const DocsArr = DoctObjBuilder(
+    const docTopush = DoctObjBuilder(
       req.files,
       URL,
       PathBaseFile,
@@ -1142,11 +1142,6 @@ const fileUpload = (params) => async (req, res, next) => {
     //     ...body,
     //   },
     // };
-    const docTopush = {
-      [propertyNameFile]: {
-        $each: DocsArr,
-      },
-    };
 
     await MongoWraper.UpdateMongoBy_idPush(
       req.params._id,
@@ -1206,21 +1201,56 @@ const DoctObjBuilder = (
   bodyParsed
 ) => {
   const dirDestino = `${PathBaseFile}/${db}/${collection}/${id}/`;
-  return files.map((file) => {
+
+  // const docTopush = {
+  //   [propertyNameFile]: {
+  //     $each: DocsArr,
+  //   },
+  // };
+  return files.reduce((acum, file) => {
     const pathDestino = dirDestino + file.filename;
     if (!fs.existsSync(dirDestino)) {
       fs.mkdirSync(dirDestino, { recursive: true });
     }
     fs.renameSync(file.path, pathDestino);
-    return {
-      file: `${URL}/${db}/${collection}/${id}/${file.filename}`,
-      filepath: pathDestino,
-      datetime: new Date(),
-      ...(bodyParsed.hasOwnProperty("data_" + file.fieldname)
-        ? JSON.parse(bodyParsed["data_" + file.fieldname])
-        : {}),
-    };
-  });
+    var filebody = {};
+    var keyName = "documentos";
+    if (bodyParsed.hasOwnProperty("data_" + file.fieldname)) {
+      filebody = JSON.parse(bodyParsed["data_" + file.fieldname]);
+      if (filebody.hasOwnProperty("keyName")) {
+        keyName = filebody.keyName;
+      }
+
+      delete filebody.keyName;
+    }
+    if (acum.hasOwnProperty(keyName)) {
+      const ActualData = acum[keyName]["$each"];
+      acum[keyName] = {
+        $each: [
+          ...ActualData,
+          {
+            file: `${URL}/${db}/${collection}/${id}/${file.filename}`,
+            filepath: pathDestino,
+            datetime: new Date(),
+            ...filebody,
+          },
+        ],
+      };
+      console.log(acum);
+    } else {
+      acum[keyName] = {
+        $each: [
+          {
+            file: `${URL}/${db}/${collection}/${id}/${file.filename}`,
+            filepath: pathDestino,
+            datetime: new Date(),
+            ...filebody,
+          },
+        ],
+      };
+    }
+    return acum;
+  }, {});
 
   // {
   //   //   file: `${ipServer}/api/v1/rules/fs/files/${req.database}/${collection}/${req.params._id}/${req.files.file[0].filename}`,
