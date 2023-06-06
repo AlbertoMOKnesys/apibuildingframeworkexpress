@@ -1066,6 +1066,29 @@ const docRemove = (params) => async (req, res, next) => {
   //   return res.status(400).send(objResp);
   // }
 };
+const removePropertyId = (params) => async (req, res, next) => {
+  params = params ? params : {};
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Database ? Database : req.database;
+
+  const data = await MongoWraper.UpdateMongoBy_idRemoveProperty(
+    req.params._id,
+    req.body.propertyToRemove,
+    collection,
+    db
+  );
+  const objResp = {
+    status: "ok",
+    message: "completed",
+    data: data,
+  };
+  if (Middleware) {
+    req.MidResponse = objResp;
+    return next();
+  }
+  res.status(200).send(objResp);
+};
 const fileUpload = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -2347,6 +2370,7 @@ module.exports = (mongoWraperEasyClient) => {
     pullIdFromArrayManagementDB: pullIdFromArrayManagementDB,
     listFilter: listFilter,
     listFilter2: listFilter2,
+    removePropertyId: removePropertyId,
     uploadRemove: uploadRemove,
     uploadPatch: uploadPatch,
     uploadAdd: uploadAdd,
