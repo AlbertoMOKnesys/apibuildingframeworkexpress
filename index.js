@@ -2156,16 +2156,32 @@ const listFilter2 = (params) => async (req, res, next) => {
   //esta es la diferencia del list filter 1
   const LookUpBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_lookup"))
-    .map((e) => {
-      return {
-        $lookup: {
-          from: e.replace("_lookup", ""),
-          localField: req.query[e],
-          foreignField: "_id",
-          as: e.replace("_lookup", ""),
+    .reduce((acum, e) => {
+      if (Array.isArray(req.query[e])) {
+        const ArrLookup = req.query[e].map((property) => {
+          return {
+            $lookup: {
+              from: e.replace("_lookup", ""),
+              localField: property,
+              foreignField: "_id",
+              as: e.replace("_lookup", "") + property,
+            },
+          };
+        });
+        return [...acum, ...ArrLookup];
+      }
+      return [
+        ...acum,
+        {
+          $lookup: {
+            from: e.replace("_lookup", ""),
+            localField: req.query[e],
+            foreignField: "_id",
+            as: e.replace("_lookup", "") + req.query[e],
+          },
         },
-      };
-    });
+      ];
+    }, []);
 
   const PropertyDateFilter = req.query.hasOwnProperty("propertydatefilter")
     ? req.query.propertydatefilter
