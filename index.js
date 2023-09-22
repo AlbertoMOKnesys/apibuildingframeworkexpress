@@ -169,6 +169,38 @@ const GetGenericQueryString = (Query) => {
     return { $or: [...QuerySpecific] };
   }
 };
+const GetGenericComparisonQuery = (Query,operator) => {
+  // const ReqQuery = { Search: req.query.ObrasId };
+  if (Array.isArray(Query.Search)) {
+    const QueriesArrProp = Query.Search.reduce((acum, ArrSearch) => {
+      const QuerySpecific = [{ [Query.Property]:{[operator]: ArrSearch} }];
+      return [...acum, ...QuerySpecific];
+    }, []);
+    //console.log(QueriesArrProp);
+
+    //[{ $or: [...QueriesArrProp] }];
+    return { $or: [...QueriesArrProp] };
+  } else {
+    const QuerySpecific = [{ [Query.Property]: {[operator]:Query.Search} }];
+    return { $or: [...QuerySpecific] };
+  }
+};
+const GetDateComparisonQuery = (Query,operator) => {
+  // const ReqQuery = { Search: req.query.ObrasId };
+  if (Array.isArray(Query.Search)) {
+    const QueriesArrProp = Query.Search.reduce((acum, ArrSearch) => {
+      const QuerySpecific = [{ [Query.Property]:{[operator]: new Date(ArrSearch)} }];
+      return [...acum, ...QuerySpecific];
+    }, []);
+    //console.log(QueriesArrProp);
+
+    //[{ $or: [...QueriesArrProp] }];
+    return { $or: [...QueriesArrProp] };
+  } else {
+    const QuerySpecific = [{ [Query.Property]: {[operator]:new Date(Query.Search)} }];
+    return { $or: [...QuerySpecific] };
+  }
+};
 const GetGenericQueryNeid = (Query) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -1636,6 +1668,10 @@ const listFilter = (params) => async (req, res, next) => {
   const db = Database ? Database : req.database;
   //   const db = req.database;
   /// CON paginado infinito
+
+  if(req.method=="POST"){
+    req.query=req.body
+  }
   const page = parseInt(req.query.page) || 0;
   const limit = parseInt(req.query.limit);
   console.log("path-------------------------");
@@ -1987,12 +2023,42 @@ const listFilter = (params) => async (req, res, next) => {
     res.status(500).send(objResp);
   }
 };
+const QueryGenericComparisonGenerator=(req,operator)=>{
+  const QueriesBuilder = Object.keys(req.query)
+  .filter((e) => e.includes("_"+operator))
+  .map((e) => {
+    return {
+      Property: e.replace("_"+operator, ""),
+      Search: parseInt(req.query[e]),
+    };
+  });
+return QueriesBuilder.map((e) =>
+  GetGenericComparisonQuery(e,"$"+operator)
+);
+}
+const QueryGenericComparisonGeneratorDate=(req,operator)=>{
+  const QueriesBuilder = Object.keys(req.query)
+  .filter((e) => e.includes("_"+operator))
+  .map((e) => {
+    return {
+      Property: e.replace("_"+operator, ""),
+      Search: parseInt(req.query[e]),
+    };
+  });
+return QueriesBuilder.map((e) =>
+  GetDateComparisonQuery(e,"$"+operator)
+);
+}
+
 const listFilter2 = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const db = req.database;
+  if(req.method=="POST"){
+    req.query=req.body
+  }
   /// CON paginado infinito
   const page = parseInt(req.query.page) || 0;
   const limit = parseInt(req.query.limit);
@@ -2108,6 +2174,16 @@ const listFilter2 = (params) => async (req, res, next) => {
     GetGenericQueryString(e)
   );
 
+  const GTMongoQueries = QueryGenericComparisonGenerator(req,"$gt") 
+  const GTEMongoQueries = QueryGenericComparisonGenerator(req,"$gte") 
+  const LTMongoQueries = QueryGenericComparisonGenerator(req,"$lt") 
+  const LTEMongoQueries = QueryGenericComparisonGenerator(req,"$lte") 
+
+  const GTDateMongoQueries = QueryGenericComparisonGenerator(req,"$gt") 
+  const GTEDateMongoQueries = QueryGenericComparisonGenerator(req,"$gte") 
+  const LTDateMongoQueries = QueryGenericComparisonGenerator(req,"$lt") 
+  const LTEDateMongoQueries = QueryGenericComparisonGenerator(req,"$lte") 
+  
   const IdQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_id"))
     .map((e) => {
@@ -2211,11 +2287,23 @@ const listFilter2 = (params) => async (req, res, next) => {
       NestringMongoQueries.length > 0 ||
       StringtMongoQueries.length > 0 ||
       IntegerMongoQueries.length > 0 ||
+      GTDateMongoQueries.length > 0 ||
+      GTEDateMongoQueries.length > 0 ||
+      LTDateMongoQueries.length > 0 ||
+      LTEDateMongoQueries.length > 0 ||
+      GTMongoQueries.length > 0 ||
+      GTEMongoQueries.length > 0 ||
+      LTMongoQueries.length > 0 ||
+      LTEMongoQueries.length > 0 ||
       QueryDate.length > 0
         ? {
             $and: [
               ...StringtMongoQueries,
               ...IntegerMongoQueries,
+              ...GTMongoQueries,
+              ...GTEMongoQueries,
+              ...LTMongoQueries,
+              ...LTEMongoQueries,
               ...BoolMongoQueries,
               ...IdMongoQueries,
               ...NeidMongoQueries,

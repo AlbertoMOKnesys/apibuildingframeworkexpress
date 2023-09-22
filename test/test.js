@@ -21,7 +21,7 @@ app.get(
   "/",
   apibuildingframeworkexpress.listFilter({
     Database: "Demek930165",
-    Collection: "asistencias",
+    Collection: "trabajadores",
   })
 );
 //Remove Test
@@ -79,7 +79,6 @@ const testListfilter = async () => {
       params: {
         limit: 10,
         page: 0,
-        trabajadores_nombre_string: "Alberto",
       },
     })
     .then(function (response) {
