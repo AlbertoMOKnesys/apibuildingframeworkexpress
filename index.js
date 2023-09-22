@@ -2041,7 +2041,7 @@ const QueryGenericComparisonGeneratorDate=(req,operator)=>{
   .filter((e) => e.includes("_"+operator))
   .map((e) => {
     return {
-      Property: e.replace("_"+operator, ""),
+      Property: e.replace("_d"+operator, ""),
       Search: parseInt(req.query[e]),
     };
   });
@@ -2174,15 +2174,15 @@ const listFilter2 = (params) => async (req, res, next) => {
     GetGenericQueryString(e)
   );
 
-  const GTMongoQueries = QueryGenericComparisonGenerator(req,"$gt") 
-  const GTEMongoQueries = QueryGenericComparisonGenerator(req,"$gte") 
-  const LTMongoQueries = QueryGenericComparisonGenerator(req,"$lt") 
-  const LTEMongoQueries = QueryGenericComparisonGenerator(req,"$lte") 
+  const GTMongoQueries = QueryGenericComparisonGenerator(req,"gt") 
+  const GTEMongoQueries = QueryGenericComparisonGenerator(req,"gte") 
+  const LTMongoQueries = QueryGenericComparisonGenerator(req,"lt") 
+  const LTEMongoQueries = QueryGenericComparisonGenerator(req,"lte") 
 
-  const GTDateMongoQueries = QueryGenericComparisonGenerator(req,"$gt") 
-  const GTEDateMongoQueries = QueryGenericComparisonGenerator(req,"$gte") 
-  const LTDateMongoQueries = QueryGenericComparisonGenerator(req,"$lt") 
-  const LTEDateMongoQueries = QueryGenericComparisonGenerator(req,"$lte") 
+  const GTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"gt") 
+  const GTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"gte") 
+  const LTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"lt") 
+  const LTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"lte") 
   
   const IdQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_id"))
