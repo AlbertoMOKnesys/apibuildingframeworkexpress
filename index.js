@@ -2038,7 +2038,7 @@ return QueriesBuilder.map((e) =>
 }
 const QueryGenericComparisonGeneratorDate=(req,operator)=>{
   const QueriesBuilder = Object.keys(req.query)
-  .filter((e) => e.includes("_"+operator))
+  .filter((e) => e.includes("_d"+operator))
   .map((e) => {
     return {
       Property: e.replace("_d"+operator, ""),
