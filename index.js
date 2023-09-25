@@ -179,14 +179,15 @@ const GetGenericComparisonQuery = (Query,operator) => {
     //console.log(QueriesArrProp);
 
     //[{ $or: [...QueriesArrProp] }];
-    return { $or: [...QueriesArrProp] };
+    return QueriesArrProp ;
   } else {
-    const QuerySpecific = [{ [Query.Property]: {[operator]:Query.Search} }];
-    return { $or: [...QuerySpecific] };
+    const QuerySpecific = { [Query.Property]: {[operator]:Query.Search} };
+    return QuerySpecific ;
   }
 };
 const GetDateComparisonQuery = (Query,operator) => {
   // const ReqQuery = { Search: req.query.ObrasId };
+  // console.log(Query.Search)
   if (Array.isArray(Query.Search)) {
     const QueriesArrProp = Query.Search.reduce((acum, ArrSearch) => {
       const QuerySpecific = [{ [Query.Property]:{[operator]: new Date(ArrSearch)} }];
@@ -195,10 +196,12 @@ const GetDateComparisonQuery = (Query,operator) => {
     //console.log(QueriesArrProp);
 
     //[{ $or: [...QueriesArrProp] }];
-    return { $or: [...QueriesArrProp] };
+    return QueriesArrProp ;
   } else {
-    const QuerySpecific = [{ [Query.Property]: {[operator]:new Date(Query.Search)} }];
-    return { $or: [...QuerySpecific] };
+    
+    // console.log("queryy",Query.Search)
+    const QuerySpecific = { [Query.Property]: {[operator]:new Date(Query.Search)} };
+    return  QuerySpecific ;
   }
 };
 const GetGenericQueryNeid = (Query) => {
@@ -2025,10 +2028,10 @@ const listFilter = (params) => async (req, res, next) => {
 };
 const QueryGenericComparisonGenerator=(req,operator)=>{
   const QueriesBuilder = Object.keys(req.query)
-  .filter((e) => e.includes("_"+operator))
+  .filter((e) => e.includes("_i"+operator+"i"))
   .map((e) => {
     return {
-      Property: e.replace("_"+operator, ""),
+      Property: e.replace("_i"+operator+"i", ""),
       Search: parseInt(req.query[e]),
     };
   });
@@ -2038,15 +2041,16 @@ return QueriesBuilder.map((e) =>
 }
 const QueryGenericComparisonGeneratorDate=(req,operator)=>{
   const QueriesBuilder = Object.keys(req.query)
-  .filter((e) => e.includes("_"+operator))
+  .filter((e) => e.includes("_d"+operator+"d"))
   .map((e) => {
     return {
-      Property: e.replace("_"+operator, ""),
-      Search: parseInt(req.query[e]),
+      Property: e.replace("_d"+operator+"d", ""),
+      Search: req.query[e],
     };
   });
+  console.log("req",req.query)
 return QueriesBuilder.map((e) =>
-  GetDateComparisonQuery(e,"$"+operator.replace("d"+operator, ""))
+  GetDateComparisonQuery(e,"$"+operator)
 );
 }
 
@@ -2179,10 +2183,11 @@ const listFilter2 = (params) => async (req, res, next) => {
   const LTMongoQueries = QueryGenericComparisonGenerator(req,"lt") 
   const LTEMongoQueries = QueryGenericComparisonGenerator(req,"lte") 
 
-  const GTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"dgt") 
-  const GTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"dgte") 
-  const LTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"dlt") 
-  const LTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"dlte") 
+  const GTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"gt") 
+  const GTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"gte") 
+  const LTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"lt") 
+  // console.log(LTDateMongoQueries[0])
+  const LTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"lte") 
   
   const IdQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_id"))
@@ -2304,6 +2309,10 @@ const listFilter2 = (params) => async (req, res, next) => {
               ...GTEMongoQueries,
               ...LTMongoQueries,
               ...LTEMongoQueries,
+              ...LTDateMongoQueries,
+              ...LTEDateMongoQueries,
+              ...GTDateMongoQueries,
+              ...GTEDateMongoQueries,
               ...BoolMongoQueries,
               ...IdMongoQueries,
               ...NeidMongoQueries,

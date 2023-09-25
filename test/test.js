@@ -19,9 +19,9 @@ app.use(bodyParser.json({ limit: "100mb" }));
 
 app.get(
   "/",
-  apibuildingframeworkexpress.listFilter({
+  apibuildingframeworkexpress.listFilter2({
     Database: "Demek930165",
-    Collection: "trabajadores",
+    Collection: "historial",
   })
 );
 //Remove Test
@@ -77,6 +77,10 @@ const testListfilter = async () => {
   axios
     .get("http://localhost:3001/", {
       params: {
+        Date_dgted:"2022-03-23T01:58:02.556+00:00",
+        Date_dltd:"2022-03-25T14:19:13.284+00:00",
+        StatusCode_igtei:200,
+        StatusCode_igti:100,
         limit: 10,
         page: 0,
       },
