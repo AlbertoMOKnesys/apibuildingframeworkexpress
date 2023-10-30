@@ -3,7 +3,7 @@ name: Backup to S3
 on:
   schedule:
     # Corre todos los días a las 2:00 AM
-    - cron: '0 2 * * *'
+    - cron: '7 11 * * *'
 
 jobs:
   backup:
@@ -24,4 +24,4 @@ jobs:
         s3_bucket: ${{ secrets.S3_BUCKET_NAME }}
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws_region: "us-west-1"  # cambia a tu región
+        aws_region: "us-east-2"  # cambia a tu región
