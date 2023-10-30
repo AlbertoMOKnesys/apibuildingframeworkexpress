@@ -1,0 +1,27 @@
+name: Backup to S3
+
+on:
+  schedule:
+    # Corre todos los días a las 2:00 AM
+    - cron: '0 2 * * *'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v2
+
+    - name: Zip repo
+      run: zip -r repo.zip .
+
+    - name: Copy to S3
+      uses: jakejarvis/s3-sync-action@master
+      with:
+        args: --acl private --follow-symlinks --delete
+        path_to_upload: "repo.zip"
+        s3_bucket: ${{ secrets.S3_BUCKET_NAME }}
+        aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws_region: "us-west-1"  # cambia a tu región
