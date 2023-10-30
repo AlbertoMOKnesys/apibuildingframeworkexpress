@@ -6,7 +6,6 @@ on:
       - main
   schedule:
     - cron: '11 17 * * *'
-
 jobs:
   backup:
     runs-on: ubuntu-latest
@@ -23,7 +22,7 @@ jobs:
       with:
         args: --acl private --follow-symlinks --delete
         path_to_upload: "repo.zip"
-        s3_bucket: ${{ secrets.S3_BUCKET_NAME }}
+        s3_bucket: ${{ secrets.AWS_S3_BUCKET }}
         aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws_region: "us-east-2"  # cambia a tu región
