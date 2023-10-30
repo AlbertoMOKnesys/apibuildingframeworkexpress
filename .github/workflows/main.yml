@@ -16,17 +16,17 @@ jobs:
 
     - name: Zip repo
       run: zip -r repo.zip .
-      
-    - name: Copy to S3
-      uses: jakejarvis/s3-sync-action@master
+
+    - name: Upload repo.zip to S3 bucket
+      uses: tpaschalis/s3-sync-action@master
       with:
-        args: >
-          --acl private 
-          --follow-symlinks 
-          --delete 
-          --region us-east-2
-          --access-key ${{ secrets.AWS_ACCESS_KEY_ID }}
-          --secret-key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          --bucket ${{ secrets.AWS_S3_BUCKET }}
-          --source "repo.zip"
+        args: --acl private
+      env:
+        FILE: ./repo.zip
+        AWS_REGION: 'us-east-2'
+        AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+ 
+          
 
