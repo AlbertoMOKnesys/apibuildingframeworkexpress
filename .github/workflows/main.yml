@@ -1,8 +1,10 @@
 name: Backup to S3
 
 on:
+  push:
+    branches:
+      - main
   schedule:
-    # Corre todos los días a las 2:00 AM
     - cron: '11 17 * * *'
 
 jobs:
