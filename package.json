@@ -1,6 +1,6 @@
 {
   "name": "apibuildingframeworkexpress",
-  "version": "1.0.36",
+  "version": "1.0.37",
   "description": "fast api building over express",
   "main": "index.js",
   "scripts": {
@@ -24,6 +24,7 @@
     "axios": "^0.27.2",
     "body-parser": "^1.20.0",
     "express": "^4.18.1",
+    "express-validator": "^7.0.1",
     "mongoclienteasywrapper": "^1.0.10",
     "mongodb": "^4.5.0",
     "multer": "^1.4.4",

@@ -21,7 +21,32 @@ app.get(
   "/",
   apibuildingframeworkexpress.listFilter2({
     Database: "Demek930165",
-    Collection: "historial",
+    Collection: "testschema",
+  })
+);
+const userSchema = {
+  name: {
+    isString: true,
+    notEmpty: true,
+    errorMessage: "Name must be a string",
+  },
+  age: {
+    isNumber: true,
+    optional: { options: { nullable: true } },
+    errorMessage: "Age must be a number",
+  },
+};
+
+const productSchema = {
+  title: { isString: true, errorMessage: "Title must be a string" },
+  price: { isFloat: true, errorMessage: "Price must be a number" },
+};
+app.post(
+  "/",
+  apibuildingframeworkexpress.Middlewares.validateSchema(userSchema),
+  apibuildingframeworkexpress.create({
+    Database: "Demek930165",
+    Collection: "testschema",
   })
 );
 //Remove Test
@@ -77,10 +102,10 @@ const testListfilter = async () => {
   axios
     .get("http://localhost:3001/", {
       params: {
-        Date_dgted:"2022-03-23T01:58:02.556+00:00",
-        Date_dltd:"2022-03-25T14:19:13.284+00:00",
-        StatusCode_igtei:200,
-        StatusCode_igti:100,
+        Date_dgted: "2022-03-23T01:58:02.556+00:00",
+        Date_dltd: "2022-03-25T14:19:13.284+00:00",
+        StatusCode_igtei: 200,
+        StatusCode_igti: 100,
         limit: 10,
         page: 0,
       },
@@ -100,4 +125,4 @@ const testListfilter = async () => {
   console.log("test");
 };
 // test();
-testListfilter();
+// testListfilter();

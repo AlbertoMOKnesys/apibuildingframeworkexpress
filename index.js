@@ -10,7 +10,8 @@ const { nextTick } = require("process");
 const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
 const Oculta = { oculta: { $ne: true } };
-
+//Middlewares
+const { validateSchema } = require("./middlewares/schemaValidator");
 const Assign = async (body, db0, db1) => {
   const collection = Object.keys(body);
   console.log(collection);
@@ -106,6 +107,7 @@ function objectIdWithTimestamp(timestamp) {
 
   return constructedObjectId;
 }
+
 const CreateAndArr = (req) => {
   const NonTextFields = ["page", "limit", "initialDate", "finalDate"];
 
@@ -169,39 +171,42 @@ const GetGenericQueryString = (Query) => {
     return { $or: [...QuerySpecific] };
   }
 };
-const GetGenericComparisonQuery = (Query,operator) => {
+const GetGenericComparisonQuery = (Query, operator) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
     const QueriesArrProp = Query.Search.reduce((acum, ArrSearch) => {
-      const QuerySpecific = [{ [Query.Property]:{[operator]: ArrSearch} }];
+      const QuerySpecific = [{ [Query.Property]: { [operator]: ArrSearch } }];
       return [...acum, ...QuerySpecific];
     }, []);
     //console.log(QueriesArrProp);
 
     //[{ $or: [...QueriesArrProp] }];
-    return QueriesArrProp ;
+    return QueriesArrProp;
   } else {
-    const QuerySpecific = { [Query.Property]: {[operator]:Query.Search} };
-    return QuerySpecific ;
+    const QuerySpecific = { [Query.Property]: { [operator]: Query.Search } };
+    return QuerySpecific;
   }
 };
-const GetDateComparisonQuery = (Query,operator) => {
+const GetDateComparisonQuery = (Query, operator) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   // console.log(Query.Search)
   if (Array.isArray(Query.Search)) {
     const QueriesArrProp = Query.Search.reduce((acum, ArrSearch) => {
-      const QuerySpecific = [{ [Query.Property]:{[operator]: new Date(ArrSearch)} }];
+      const QuerySpecific = [
+        { [Query.Property]: { [operator]: new Date(ArrSearch) } },
+      ];
       return [...acum, ...QuerySpecific];
     }, []);
     //console.log(QueriesArrProp);
 
     //[{ $or: [...QueriesArrProp] }];
-    return QueriesArrProp ;
+    return QueriesArrProp;
   } else {
-    
     // console.log("queryy",Query.Search)
-    const QuerySpecific = { [Query.Property]: {[operator]:new Date(Query.Search)} };
-    return  QuerySpecific ;
+    const QuerySpecific = {
+      [Query.Property]: { [operator]: new Date(Query.Search) },
+    };
+    return QuerySpecific;
   }
 };
 const GetGenericQueryNeid = (Query) => {
@@ -1664,6 +1669,64 @@ const distinct = (params) =>
     }
   };
 
+const QueryGenericComparisonGenerator = (req, operator) => {
+  const QueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_i" + operator + "i"))
+    .map((e) => {
+      return {
+        Property: e.replace("_i" + operator + "i", ""),
+        Search: parseInt(req.query[e]),
+      };
+    });
+  return QueriesBuilder.map((e) =>
+    GetGenericComparisonQuery(e, "$" + operator)
+  );
+};
+const QueryGenericComparisonGeneratorDate = (req, operator) => {
+  const QueriesBuilder = Object.keys(req.query)
+    .filter((e) => e.includes("_d" + operator + "d"))
+    .map((e) => {
+      return {
+        Property: e.replace("_d" + operator + "d", ""),
+        Search: req.query[e],
+      };
+    });
+  console.log("req", req.query);
+  return QueriesBuilder.map((e) => GetDateComparisonQuery(e, "$" + operator));
+};
+
+const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
+  params = params ? params : {};
+  const { Database, Collection, Middleware } = params;
+  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
+  const db = Database ? Database : req.database;
+
+  //   const db = "managementdb";
+  //   const collection = req.body.Collection;
+
+  const Query = { [req.body.Match.Name]: ObjectId(req.body.Match.Value) };
+  const ItemsToRemove = {
+    [req.body.ItemsToRemove.Name]: {
+      $in: req.body.ItemsToRemove.Values.map((e) => ObjectId(e)),
+    },
+  };
+  const Result = await MongoWraper.UpdateMongoManyPull(
+    Query,
+    ItemsToRemove,
+    collection,
+    db
+  );
+  const objResp = {
+    status: "ok",
+    message: "completed",
+    data: Result,
+  };
+  if (Middleware) {
+    req.MidResponse = objResp;
+    return next();
+  }
+  res.status(200).send(objResp);
+};
 const listFilter = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, Middleware } = params;
@@ -1672,8 +1735,8 @@ const listFilter = (params) => async (req, res, next) => {
   //   const db = req.database;
   /// CON paginado infinito
 
-  if(req.method=="POST"){
-    req.query=req.body
+  if (req.method == "POST") {
+    req.query = req.body;
   }
   const page = parseInt(req.query.page) || 0;
   const limit = parseInt(req.query.limit);
@@ -2026,42 +2089,14 @@ const listFilter = (params) => async (req, res, next) => {
     res.status(500).send(objResp);
   }
 };
-const QueryGenericComparisonGenerator=(req,operator)=>{
-  const QueriesBuilder = Object.keys(req.query)
-  .filter((e) => e.includes("_i"+operator+"i"))
-  .map((e) => {
-    return {
-      Property: e.replace("_i"+operator+"i", ""),
-      Search: parseInt(req.query[e]),
-    };
-  });
-return QueriesBuilder.map((e) =>
-  GetGenericComparisonQuery(e,"$"+operator)
-);
-}
-const QueryGenericComparisonGeneratorDate=(req,operator)=>{
-  const QueriesBuilder = Object.keys(req.query)
-  .filter((e) => e.includes("_d"+operator+"d"))
-  .map((e) => {
-    return {
-      Property: e.replace("_d"+operator+"d", ""),
-      Search: req.query[e],
-    };
-  });
-  console.log("req",req.query)
-return QueriesBuilder.map((e) =>
-  GetDateComparisonQuery(e,"$"+operator)
-);
-}
-
 const listFilter2 = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, Middleware } = params;
   const collection = Collection ? Collection : req.originalUrl.match(re)[0];
   const db = Database ? Database : req.database;
   //   const db = req.database;
-  if(req.method=="POST"){
-    req.query=req.body
+  if (req.method == "POST") {
+    req.query = req.body;
   }
   /// CON paginado infinito
   const page = parseInt(req.query.page) || 0;
@@ -2178,17 +2213,17 @@ const listFilter2 = (params) => async (req, res, next) => {
     GetGenericQueryString(e)
   );
 
-  const GTMongoQueries = QueryGenericComparisonGenerator(req,"gt") 
-  const GTEMongoQueries = QueryGenericComparisonGenerator(req,"gte") 
-  const LTMongoQueries = QueryGenericComparisonGenerator(req,"lt") 
-  const LTEMongoQueries = QueryGenericComparisonGenerator(req,"lte") 
+  const GTMongoQueries = QueryGenericComparisonGenerator(req, "gt");
+  const GTEMongoQueries = QueryGenericComparisonGenerator(req, "gte");
+  const LTMongoQueries = QueryGenericComparisonGenerator(req, "lt");
+  const LTEMongoQueries = QueryGenericComparisonGenerator(req, "lte");
 
-  const GTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"gt") 
-  const GTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"gte") 
-  const LTDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"lt") 
+  const GTDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "gt");
+  const GTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "gte");
+  const LTDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "lt");
   // console.log(LTDateMongoQueries[0])
-  const LTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req,"lte") 
-  
+  const LTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "lte");
+
   const IdQueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_id"))
     .map((e) => {
@@ -2442,44 +2477,15 @@ const listFilter2 = (params) => async (req, res, next) => {
     res.status(500).send(objResp);
   }
 };
-const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
-  params = params ? params : {};
-  const { Database, Collection, Middleware } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-
-  //   const db = "managementdb";
-  //   const collection = req.body.Collection;
-
-  const Query = { [req.body.Match.Name]: ObjectId(req.body.Match.Value) };
-  const ItemsToRemove = {
-    [req.body.ItemsToRemove.Name]: {
-      $in: req.body.ItemsToRemove.Values.map((e) => ObjectId(e)),
-    },
-  };
-  const Result = await MongoWraper.UpdateMongoManyPull(
-    Query,
-    ItemsToRemove,
-    collection,
-    db
-  );
-  const objResp = {
-    status: "ok",
-    message: "completed",
-    data: Result,
-  };
-  if (Middleware) {
-    req.MidResponse = objResp;
-    return next();
-  }
-  res.status(200).send(objResp);
-};
 
 module.exports = (mongoWraperEasyClient) => {
   MongoWraper = mongoWraperEasyClient;
   // const MongoWraper = require("mongoclienteasywrapper")(url);
 
   return {
+    Middlewares: {
+      validateSchema,
+    },
     pullIdFromArrayManagementDB: pullIdFromArrayManagementDB,
     listFilter: listFilter,
     listFilter2: listFilter2,
