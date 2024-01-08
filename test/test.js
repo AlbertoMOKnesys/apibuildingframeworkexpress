@@ -1,8 +1,6 @@
 const { ObjectId } = require("mongodb");
 
-const MongoWraper = require("mongoclienteasywrapper")(
-  "mongodb://knesys:knesysiot123@143.255.56.244:27017"
-);
+const MongoWraper = require("mongoclienteasywrapper")("");
 
 const apibuildingframeworkexpress = require("apibuildingframeworkexpress")(
   MongoWraper
