@@ -1,5 +1,6 @@
 const { checkSchema, validationResult } = require("express-validator");
 
+// https://express-validator.github.io/docs/api/check-schema
 //Ejemplo
 const userSchema = {
   name: {
@@ -16,7 +17,7 @@ const userSchema = {
   // Añade más campos según sea necesario
 };
 
-const validateSchema = (schema) => {
+const validateSchemaExpress = (schema) => {
   return [
     checkSchema(schema),
     // Middleware para rechazar campos adicionales
@@ -52,4 +53,4 @@ const validateSchema = (schema) => {
     },
   ];
 };
-exports.validateSchema = validateSchema;
+exports.validateSchemaExpress = validateSchemaExpress;

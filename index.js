@@ -11,7 +11,10 @@ const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
 const Oculta = { oculta: { $ne: true } };
 //Middlewares
-const { validateSchema } = require("./middlewares/schemaValidator");
+const {
+  validateSchemaExpress,
+} = require("./middlewares/schemaValidatorExpress");
+const { validateSchemaYup } = require("./middlewares/schemaValidatorYup");
 const Assign = async (body, db0, db1) => {
   const collection = Object.keys(body);
   console.log(collection);
@@ -2484,7 +2487,8 @@ module.exports = (mongoWraperEasyClient) => {
 
   return {
     Middlewares: {
-      validateSchema,
+      validateSchemaExpress,
+      validateSchemaYup,
     },
     pullIdFromArrayManagementDB: pullIdFromArrayManagementDB,
     listFilter: listFilter,

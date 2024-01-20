@@ -1,6 +1,8 @@
 const { ObjectId } = require("mongodb");
-
-const MongoWraper = require("mongoclienteasywrapper")("");
+const yup = require("yup");
+const MongoWraper = require("mongoclienteasywrapper")(
+  "mongodb://knesys:knesysiot123@52.248.41.72:27020"
+);
 
 const apibuildingframeworkexpress = require("apibuildingframeworkexpress")(
   MongoWraper
@@ -22,28 +24,45 @@ app.get(
     Collection: "testschema",
   })
 );
-const userSchema = {
+//express validator
+const userSchemaExpress = {
   name: {
     isString: true,
     notEmpty: true,
     errorMessage: "Name must be a string",
   },
+  apellido: {
+    isString: true,
+    notEmpty: true,
+    errorMessage: "Name must be a string",
+  },
   age: {
-    isNumber: true,
+    isInt: true,
     optional: { options: { nullable: true } },
     errorMessage: "Age must be a number",
   },
 };
 
-const productSchema = {
-  title: { isString: true, errorMessage: "Title must be a string" },
-  price: { isFloat: true, errorMessage: "Price must be a number" },
-};
+const userSchemaYup = yup
+  .object({
+    name: yup.string().required(),
+    age: yup.number().positive().integer().required(),
+    email: yup.string().email().required(),
+  })
+  .noUnknown(true, "No extra fields allowed")
+  .required()
+  .strict();
+
 app.post(
   "/",
-  apibuildingframeworkexpress.Middlewares.validateSchema(userSchema),
+  apibuildingframeworkexpress.Middlewares.validateSchemaYup(userSchemaYup),
+  (req, res, next) => {
+    req.body.apellido = "tello";
+    req.body.fullname = req.body.name + req.body.apellido;
+    next();
+  },
   apibuildingframeworkexpress.create({
-    Database: "Demek930165",
+    Database: "test",
     Collection: "testschema",
   })
 );
