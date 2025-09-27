@@ -1,29 +1,33 @@
-const { sizeObj } = require("./common");
-// const ObjectId = require("mongodb").ObjectID;
-const ObjectId = require("mongodb").ObjectId;
+// index.js
 const fs = require("fs");
+const ObjectId = require("mongodb").ObjectId;
+
+const { sizeObj } = require("./common");
 const uploadfileDatos = require("./uploadFileData");
 const uploadfileDatosNew = require("./uploadFileDataNew");
-// const { ipServer } = require("../config/vars");
 const { ApiError, ApiErrorData } = require("./ApiError");
-const { nextTick } = require("process");
+// const { ipServer } = require("../config/vars");
+
 const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
 const Oculta = { oculta: { $ne: true } };
-//Middlewares
+
+// Validations
 const {
   validateSchemaExpress,
 } = require("./middlewares/schemaValidatorExpress");
 const { validateSchemaYup } = require("./middlewares/schemaValidatorYup");
+
 const Assign = async (body, db0, db1) => {
   const collection = Object.keys(body);
   console.log(collection);
   //   {
   //     "asistencias": ["61f801cdb6153a0034c123ec"]
-  // collection:[id]
+  //      collection:[id]
   //   }
 
   console.log({ [collection[1] + "_id"]: { $each: body[collection[1]] } });
+
   const PushFirstCollection = await MongoWraper.UpdateMongoManyBy_idAddToSet(
     // ["61f801cdb6153a0034c123ec"]
     body[collection[0]],
@@ -36,6 +40,7 @@ const Assign = async (body, db0, db1) => {
     db0
   );
   // console.log(PushFirstCollection);
+
   const PushSecondCollection = await MongoWraper.UpdateMongoManyBy_idAddToSet(
     body[collection[1]],
     {
@@ -46,7 +51,6 @@ const Assign = async (body, db0, db1) => {
     collection[1],
     db1
   );
-
   // console.log(PushSecondCollection);
 
   return;
@@ -82,6 +86,7 @@ const UnAssign = async (body, db0, db1) => {
 
   return;
 };
+
 const UnAssignIdToCollections = async (collection, field, id, db) => {
   // console.log("col", collection);
   // console.log("fie", field);
@@ -126,6 +131,7 @@ const CreateAndArr = (req) => {
 
   return andArr;
 };
+
 const GetGenericQueryId = (Query) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -142,6 +148,7 @@ const GetGenericQueryId = (Query) => {
     return { $or: [...QuerySpecific] };
   }
 };
+
 const GetGenericQueryBool = (Query) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -158,6 +165,7 @@ const GetGenericQueryBool = (Query) => {
     return { $or: [...QuerySpecific] };
   }
 };
+
 const GetGenericQueryString = (Query) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -174,6 +182,7 @@ const GetGenericQueryString = (Query) => {
     return { $or: [...QuerySpecific] };
   }
 };
+
 const GetGenericComparisonQuery = (Query, operator) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -190,6 +199,7 @@ const GetGenericComparisonQuery = (Query, operator) => {
     return QuerySpecific;
   }
 };
+
 const GetDateComparisonQuery = (Query, operator) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   // console.log(Query.Search)
@@ -212,6 +222,7 @@ const GetDateComparisonQuery = (Query, operator) => {
     return QuerySpecific;
   }
 };
+
 const GetGenericQueryNeid = (Query) => {
   // const ReqQuery = { Search: req.query.ObrasId };
   if (Array.isArray(Query.Search)) {
@@ -250,7 +261,8 @@ const GetGenericQueryPartial = (Query) => {
 
   return { $and: fullAndArray };
 };
-//probado
+
+// tried
 const list = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, Middleware } = params;
@@ -533,7 +545,7 @@ const createMultipleCore = (params) => async (req, res, next) => {
 };
 
 const create = (params) => async (req, res, next) => {
-  params = params ? params : {};
+  params = params || {};
   const {
     Database,
     Collection,
@@ -543,111 +555,104 @@ const create = (params) => async (req, res, next) => {
     AsyncFunctionAfter,
     Middleware,
   } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
 
-  // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  // const Db = Database ? Database : req.database;
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
 
-  //codigo nuevo para asignar al momento de insertar
-
-  const objToSave = { ...req.body, datetime: new Date() };
-  console.log(objToSave);
-  //Guadando asignaciones para que no se inserten junto con el body
-  let Asignaciones = req.body.hasOwnProperty("_Assign") ? req.body._Assign : [];
-
-  delete req.body._Assign;
-
-  //Insertando en DB\
-  console.log("llego hasta acaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-  console.log(req.body);
-  let dbResponse;
   try {
-    dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, db);
-  } catch (err) {
-    console.log(err);
+    // Extract assignments without mutating req.body
+    const { _Assign, ...bodyData } = req.body;
+    const asignaciones = _Assign || [];
 
-    throw new ApiErrorData(
-      400,
-      ApiErrorFailDb ? ApiErrorFailDb : "db error",
-      err
-    );
-  }
+    // Object to save
+    const objToSave = {
+      ...bodyData,
+      datetime: new Date(),
+    };
+    console.log(objToSave);
 
-  //codigo nuevo para asignar al momento de insertar
-  //agregando id de lo que acabamos de insertar a la asignacion
-  // "_Assign": [
-  //   {
-  //     "asistencias": ["61f801cdb6153a0034c123ec"]
-  //   }
-  // ]
-  Asignaciones = Asignaciones.map((e) => {
-    //   {
-    //     "asistencias": ["61f801cdb6153a0034c123ec"]
-    // collection:[id]
-    //   }
-    return { ...e, [collection]: [dbResponse.insertedId] };
-  });
-  //
+    // Insert into DB
+    const dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, db);
 
-  const PromisesAssign = Asignaciones.map((e) => Assign(e, db, db));
+    // Process assignments
+    if (asignaciones.length > 0) {
+      const asignacionesConId = asignaciones.map((e) => ({
+        ...e,
+        [collection]: [dbResponse.insertedId],
+      }));
 
-  await Promise.all(PromisesAssign);
-
-  //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
-  if (req.files) {
-    // const dirDestino = `${__basedir}/files/${Db}/${collection}/${dbResponse.insertedId}/`;
-    const dirDestino = `${PathBaseFile}/${db}/${collection}/${dbResponse.insertedId}/`;
-    if (!fs.existsSync(dirDestino)) {
-      fs.mkdirSync(dirDestino, { recursive: true });
+      const promisesAssign = asignacionesConId.map((e) => Assign(e, db, db));
+      await Promise.allSettled(promisesAssign); // Changed to allSettled to avoid failing if one assignment fails
     }
-    const fotofile = req.files.file[0];
-    const pathDestino = dirDestino + fotofile.filename;
-    fs.renameSync(fotofile.path, pathDestino);
-    //actualizando el directorio al que se movio
 
-    // const foto = `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
-    const foto = `${URL}/${db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
-    await MongoWraper.UpdateMongoBy_id(
+    // Process files if they exist
+    if (req.files && req.files.file && req.files.file[0]) {
+      const dirDestino = `${PathBaseFile}/${db}/${collection}/${dbResponse.insertedId}/`;
+
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(dirDestino)) {
+        await fs.promises.mkdir(dirDestino, { recursive: true });
+      }
+
+      const fotofile = req.files.file[0];
+      const pathDestino = dirDestino + fotofile.filename;
+
+      // Move file asynchronously
+      await fs.promises.rename(fotofile.path, pathDestino);
+
+      // Photo URL
+      const foto = `${URL}/${db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
+
+      // Update document with photo info
+      await MongoWraper.UpdateMongoBy_id(
+        dbResponse.insertedId,
+        {
+          foto: foto,
+          fotopath: pathDestino,
+        },
+        collection,
+        db
+      );
+
+      // Add to req.body for backwards compatibility
+      req.body.foto = foto;
+      req.body.fotopath = pathDestino;
+    }
+
+    // Get updated document
+    const dbResponseFind = await MongoWraper.FindOne(
       dbResponse.insertedId,
-      {
-        foto: foto,
-        fotopath: pathDestino,
-      },
       collection,
       db
     );
 
-    req.body.foto = foto;
-    req.body.fotopath = pathDestino;
+    // Execute after function if exists
+    if (AsyncFunctionAfter) {
+      await AsyncFunctionAfter(req, res, dbResponse);
+    }
+
+    // Prepare response
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: dbResponseFind,
+      extra: req.extraresponse,
+    };
+
+    // If middleware, pass to next
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    // Send response
+    res.status(200).send(objResp);
+  } catch (err) {
+    console.error("Error in create:", err);
+
+    // Handle error properly
+    throw new ApiErrorData(400, ApiErrorFailDb || "db error", err);
   }
-
-  const dbResponseFind = await MongoWraper.FindOne(
-    dbResponse.insertedId,
-    collection,
-    db
-  );
-
-  if (AsyncFunctionAfter) {
-    await AsyncFunctionAfter(req, res, dbResponse);
-  }
-
-  //TODO regresar en la respuesta si las asignaciones fueron correctas
-
-  const objResp = {
-    status: "ok",
-    message: "completed",
-    data: dbResponseFind,
-    extra: req.extraresponse,
-  };
-  if (Middleware) {
-    req.MidResponse = objResp;
-    return next();
-  }
-  res.status(200).send(objResp);
-  // res
-  // .status(200)
-  // .send({ status: "ok", message: "face indexed", data: percentageUpdate });
 };
 
 const updatePatch = (params) => async (req, res, next) => {
@@ -762,6 +767,7 @@ const updatePatch = (params) => async (req, res, next) => {
   }
   res.status(200).send(objResp);
 };
+
 const updatePatchMany = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -810,69 +816,72 @@ const updatePatchMany = (params) => async (req, res, next) => {
   }
   res.status(200).send(objResp);
 };
+
 const remove = (params) => async (req, res, next) => {
-  params = params ? params : {};
+  params = params || {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-  //   const collection = req.originalUrl.match(re)[0];
-  console.log("entre a remove");
 
-  let Desasignaciones = req.body.hasOwnProperty("_Unassign")
-    ? req.body._Unassign
-    : [];
-  console.log(Desasignaciones);
-  delete req.body._Unassign;
-
-  let RecursiveDelete = req.body.hasOwnProperty("_RecursiveDelete")
-    ? req.body._RecursiveDelete
-    : [];
-  console.log(RecursiveDelete);
-  delete req.body._RecursiveDelete;
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
 
   try {
+    // Extract unassignments and recursive deletes without mutating req.body
+    const { _Unassign, _RecursiveDelete, ...bodyData } = req.body;
+    const desasignaciones = _Unassign || [];
+    const recursiveDelete = _RecursiveDelete || [];
+
+    // Delete document from DB (soft delete)
     const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
       req.params._id,
       collection,
       db
     );
 
+    // Process recursive deletes in related collections
+    if (recursiveDelete.length > 0) {
+      const promisesRecursiveDelete = recursiveDelete.map((collectionDelete) =>
+        MongoWraper.UpdateMongoMany(
+          { [collection + "_id"]: req.params._id },
+          { status: "deleted" },
+          collectionDelete,
+          db
+        )
+      );
+      await Promise.allSettled(promisesRecursiveDelete); // Changed to allSettled to avoid failing if one operation fails
+    }
+
+    // Process unassignments
+    if (desasignaciones.length > 0) {
+      const promisesUnAssign = desasignaciones.map((collectionDelete) =>
+        UnAssignIdToCollections(
+          collectionDelete,
+          collection,
+          req.params._id,
+          db
+        )
+      );
+      await Promise.allSettled(promisesUnAssign); // Changed to allSettled to avoid failing if one operation fails
+    }
+
+    // Prepare response
     const objResp = {
       status: "ok",
       message: "completed",
       data: dbResponse,
     };
 
-    const PromisesRecursiveDelete = RecursiveDelete.map((collectionDelete) =>
-      MongoWraper.UpdateMongoMany(
-        { [collection + "_id"]: req.params._id },
-        { status: "deleted" },
-        collectionDelete,
-        db
-      )
-    );
-    await Promise.all(PromisesRecursiveDelete);
-    // Desasignaciones = Desasignaciones.map((e) => {
-    //   //   {
-    //   //     "asistencias": ["61f801cdb6153a0034c123ec"]
-    //   // collection:[id]
-    //   //   }
-    //   return { ...e, [collection]: [dbResponse.insertedId] };
-    // });
-    // //
-
-    const PromisesUnAssign = Desasignaciones.map((collectionDelete) =>
-      UnAssignIdToCollections(collectionDelete, collection, req.params._id, db)
-    );
-
-    await Promise.all(PromisesUnAssign);
-
+    // If middleware, pass to next
     if (Middleware) {
       req.MidResponse = objResp;
       return next();
     }
+
+    // Send response
     res.status(200).send(objResp);
   } catch (err) {
+    console.error("Error in remove:", err);
+
+    // Handle error properly
     const objResp = {
       status: "error",
       message: "db error",
@@ -882,7 +891,7 @@ const remove = (params) => async (req, res, next) => {
   }
 };
 
-//Agrega icono
+// Agrega icono
 const docUpload = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
@@ -983,7 +992,8 @@ const docUpload = (params) => async (req, res, next) => {
     return res.status(400).send(objResp);
   }
 };
-//Remueve icono
+
+// Remueve icono
 const docRemove = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
@@ -1109,6 +1119,7 @@ const docRemove = (params) => async (req, res, next) => {
   //   return res.status(400).send(objResp);
   // }
 };
+
 const removePropertyId = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
@@ -1132,6 +1143,7 @@ const removePropertyId = (params) => async (req, res, next) => {
   }
   res.status(200).send(objResp);
 };
+
 const fileUpload = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -1326,7 +1338,8 @@ const DoctObjBuilder = (
   //   ...body,
   // }
 };
-//Agrega Docuemento
+
+// Agrega Documento
 const uploadAdd = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -1451,7 +1464,7 @@ const uploadAdd = (params) => async (req, res, next) => {
   }
 };
 
-//Actualiza Docuemento
+// Actualiza Documento
 const uploadPatch = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
@@ -1570,7 +1583,7 @@ const uploadPatch = (params) => async (req, res, next) => {
   }
 };
 
-//Remueve Docuemento
+// Remueve Documento
 const uploadRemove = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, PathBaseFile, URL, Middleware } = params;
@@ -1635,7 +1648,7 @@ const uploadRemove = (params) => async (req, res, next) => {
     res.status(400).send(objResp);
   }
 };
-//probado
+
 const distinct = (params) =>
   async function (req, res, next) {
     params = params ? params : {};
@@ -1685,6 +1698,7 @@ const QueryGenericComparisonGenerator = (req, operator) => {
     GetGenericComparisonQuery(e, "$" + operator)
   );
 };
+
 const QueryGenericComparisonGeneratorDate = (req, operator) => {
   const QueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_d" + operator + "d"))
@@ -1730,6 +1744,7 @@ const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
   }
   res.status(200).send(objResp);
 };
+
 const listFilter = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, Middleware } = params;
@@ -2092,6 +2107,7 @@ const listFilter = (params) => async (req, res, next) => {
     res.status(500).send(objResp);
   }
 };
+
 const listFilter2 = (params) => async (req, res, next) => {
   params = params ? params : {};
   const { Database, Collection, Middleware } = params;
@@ -2486,26 +2502,26 @@ module.exports = (mongoWraperEasyClient) => {
   // const MongoWraper = require("mongoclienteasywrapper")(url);
 
   return {
+    create: create,
+    distinct: distinct,
+    docRemove: docRemove,
+    docUpload: docUpload,
+    fileUpload: fileUpload,
+    list: list,
+    listFilter: listFilter,
+    listFilter2: listFilter2,
+    listOne: listOne,
     Middlewares: {
       validateSchemaExpress,
       validateSchemaYup,
     },
     pullIdFromArrayManagementDB: pullIdFromArrayManagementDB,
-    listFilter: listFilter,
-    listFilter2: listFilter2,
-    removePropertyId: removePropertyId,
-    uploadRemove: uploadRemove,
-    uploadPatch: uploadPatch,
-    uploadAdd: uploadAdd,
-    fileUpload: fileUpload,
-    docRemove: docRemove,
-    docUpload: docUpload,
-    distinct: distinct,
     remove: remove,
+    removePropertyId: removePropertyId,
     updatePatch: updatePatch,
     updatePatchMany: updatePatchMany,
-    create: create,
-    listOne: listOne,
-    list: list,
+    uploadAdd: uploadAdd,
+    uploadPatch: uploadPatch,
+    uploadRemove: uploadRemove,
   };
 };
