@@ -1,6 +1,6 @@
 {
   "name": "apibuildingframeworkexpress",
-  "version": "1.0.38",
+  "version": "1.0.39",
   "description": "fast api building over express",
   "main": "index.js",
   "scripts": {
@@ -14,7 +14,24 @@
     "express",
     "fast"
   ],
-  "author": "Alberto Martinez, Gustavo Luna, Taylor Gonzalez, Jose Tello",
+  "author": "Alberto Martinez, Gustavo Luna, Christopher Taylor Gonzalez, Jose Tello",
+  "contributors": [
+    {
+      "name": "Alberto Martinez",
+      "url": "https://github.com/AlbertoMOKnesys"
+    },
+    {
+      "name": "Christopher Taylor Gonzalez",
+      "email": "taylorgr@outlook.com",
+      "url": "https://github.com/taylorgr93"
+    },
+    {
+      "name": "Gustavo Luna"
+    },
+    {
+      "name": "Jose Tello"
+    }
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/AlbertoMOKnesys/apibuildingframeworkexpress/issues"
@@ -27,7 +44,7 @@
     "express-validator": "^7.0.1",
     "mongoclienteasywrapper": "^1.0.10",
     "mongodb": "^4.5.0",
-    "multer": "^1.4.4",
+    "multer": "^2.0.2",
     "uuid": "^8.3.2",
     "yup": "^1.3.3"
   }
