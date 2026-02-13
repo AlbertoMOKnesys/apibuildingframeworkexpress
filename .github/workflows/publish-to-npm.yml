@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - "v*.." # Publica cuando se crea una nueva etiqueta (versión semántica)
+      - "v*.*.*" # Publica cuando se crea una nueva etiqueta (versión semántica)
 
 jobs:
   publish:
