@@ -5,8 +5,24 @@ const ObjectId = require("mongodb").ObjectId;
 const { sizeObj } = require("./common");
 const uploadfileDatos = require("./uploadFileData");
 const uploadfileDatosNew = require("./uploadFileDataNew");
-const { ApiError, ApiErrorData } = require("./ApiError");
-// const { ipServer } = require("../config/vars");
+const { ApiErrorData } = require("./ApiError");
+
+// Query builder helpers
+const {
+  buildProjection,
+  buildConcatenation,
+  buildSortConfig,
+  buildAllFilters,
+  buildLookupStages,
+  buildLookupStagesExtended,
+  buildDateRangeQuery,
+  buildAfterMatchStage,
+  buildFacetStage,
+  formatPaginatedResponse,
+  hasActiveFilters,
+  hasActiveFiltersExtended,
+  buildComparisonFilters,
+} = require("./helpers/queryBuilders");
 
 const re = /[a-zA-Z0-9_-]+/;
 const operatorNotDeleted = { status: { $ne: "deleted" } };
@@ -37,7 +53,7 @@ const Assign = async (body, db0, db1) => {
       },
     },
     collection[0],
-    db0
+    db0,
   );
   // console.log(PushFirstCollection);
 
@@ -49,7 +65,7 @@ const Assign = async (body, db0, db1) => {
       },
     },
     collection[1],
-    db1
+    db1,
   );
   // console.log(PushSecondCollection);
 
@@ -68,7 +84,7 @@ const UnAssign = async (body, db0, db1) => {
       },
     },
     collection[0],
-    db0
+    db0,
   );
   // console.log(PushFirstCollection);
   const PullSecondCollection = await MongoWraper.UpdateMongoManyBy_idPull(
@@ -79,7 +95,7 @@ const UnAssign = async (body, db0, db1) => {
       },
     },
     collection[1],
-    db1
+    db1,
   );
 
   // console.log(PushSecondCollection);
@@ -95,7 +111,7 @@ const UnAssignIdToCollections = async (collection, field, id, db) => {
     await MongoWraper.UpdateMongoManyPullIDToCollectionPull(
       { [field + "_id"]: ObjectId(id) },
       collection,
-      db
+      db,
     );
 
   return;
@@ -126,7 +142,7 @@ const CreateAndArr = (req) => {
         ? []
         : req.query[prop].split(" ").map((word) => {
             return { [prop]: { $regex: word, $options: "si" } };
-          })
+          }),
     );
 
   return andArr;
@@ -262,164 +278,415 @@ const GetGenericQueryPartial = (Query) => {
   return { $and: fullAndArray };
 };
 
-// tried
-const list = (params) => async (req, res, next) => {
-  params = params ? params : {};
-  const { Database, Collection, Middleware } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-  //   const collection = req.originalUrl.match(re)[0];
-  console.log("collection", collection);
-  const hasOrder =
-    req.user.order !== undefined && req.user.order[collection] !== undefined
-      ? req.user.order[collection]
-      : {};
-  console.log("hasOrder: ", hasOrder);
-  const QueryFull = { ...req.query };
-  delete req.query.showdeleted;
-  delete req.query.showoculta;
-  var sizeQuery = sizeObj(req.query);
+// -------- Refactored methods --------------------
 
-  if (sizeQuery > 0) {
-    /// CON paginado infinito
-    const page = parseInt(req.query.page) || 0;
-    const limit = parseInt(req.query.limit);
+/**
+ * Creates a new document in the specified MongoDB collection.
+ *
+ * Handles file uploads, collection assignments, and supports middleware chaining.
+ * Files are moved from temp directory to a permanent location based on document ID.
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {string} [params.PathBaseFile] - Base path for file storage
+ * @param {string} [params.URL] - Base URL for file access
+ * @param {string} [params.ApiErrorFailDb] - Custom error message for DB failures
+ * @param {Function} [params.AsyncFunctionAfter] - Callback executed after document creation
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage
+ * app.post('/users', apiBuilder.create());
+ *
+ * @example
+ * // With custom database and after callback
+ * app.post('/users', apiBuilder.create({
+ *   Database: 'customDb',
+ *   AsyncFunctionAfter: async (req, res, dbResponse) => {
+ *     await sendEmail(dbResponse.insertedId);
+ *   }
+ * }));
+ */
+const create = (params) => async (req, res, next) => {
+  params = params || {};
+  const {
+    Database,
+    Collection,
+    PathBaseFile,
+    URL,
+    ApiErrorFailDb,
+    AsyncFunctionAfter,
+    Middleware,
+  } = params;
 
-    const andArr = CreateAndArr(req);
-
-    const fullAndArray = andArr.reduce((acum, arr) => [...acum, ...arr], []);
-
-    const exampleQuerie = {
-      $and: [
-        ...fullAndArray,
-        QueryFull.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted,
-        QueryFull.hasOwnProperty("showoculta") ? {} : Oculta,
-      ],
-    };
-    console.log(exampleQuerie);
-    /* Find all documents created after midnight on May 25th, 1980 */
-    // db.mycollection.find({ _id: { $gt: objectIdWithTimestamp("1980/05/25") } });
-    if (req.query.initialDate || req.query.finalDate) {
-      const gte = new Date(req.query.initialDate);
-      const lt = new Date(req.query.finalDate);
-
-      exampleQuerie.$and.push({
-        _id: {
-          $gte: objectIdWithTimestamp(req.query.initialDate),
-          $lt: objectIdWithTimestamp(req.query.finalDate),
-        },
-      });
-    }
-
-    const cuandoNoVienenFiltros = { $and: [] };
-
-    let query =
-      JSON.stringify(cuandoNoVienenFiltros) == JSON.stringify(exampleQuerie)
-        ? {}
-        : exampleQuerie;
-    console.log("+++++++++++++++++++++++++Queryy Full2+++++++++++++++++++++");
-    console.log(JSON.stringify(query));
-
-    try {
-      const dbResponse = await MongoWraper.FindPaginated(
-        query,
-        page,
-        limit,
-        collection,
-        db
-      );
-
-      const acople = dbResponse.map((generic) => {
-        if (hasOrder[generic._id] !== undefined)
-          return { ...generic, lastUse: hasOrder[generic._id] };
-        else return { ...generic, lastUse: 0 };
-      });
-      const objResp = {
-        status: "ok",
-        message: "completed",
-        rows: acople.length,
-        data: acople,
-      };
-      if (Middleware) {
-        req.MidResponse = objResp;
-        return next();
-      }
-      res.status(200).send(objResp);
-    } catch (err) {
-      const objResp = {
-        status: "error",
-        message: "db error",
-        data: err,
-      };
-      res.status(400).send(objResp);
-    }
-  } else {
-    try {
-      // /// SIN  paginado
-      const exampleQuerie = {
-        $and: [
-          QueryFull.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted,
-          QueryFull.hasOwnProperty("showoculta") ? {} : Oculta,
-        ],
-      };
-      // const query = {};
-      const dbResponse = await MongoWraper.PopulateAuto(
-        exampleQuerie,
-        collection,
-        db
-      );
-
-      const acople = dbResponse.map((generic) => {
-        if (hasOrder[generic._id] !== undefined)
-          return { ...generic, lastUse: hasOrder[generic._id] };
-        else return { ...generic, lastUse: 0 };
-      });
-      const objResp = {
-        status: "ok",
-        message: "completed",
-        rows: acople.length,
-        data: acople,
-      };
-      res.status(200).send(objResp);
-    } catch (err) {
-      const objResp = {
-        status: "error",
-        message: "db error",
-        data: err,
-      };
-      res.status(400).send(objResp);
-    }
-  }
-};
-
-const listOne = (params) => async (req, res, next) => {
-  params = params ? params : {};
-  const { Database, Collection, Middleware } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-
-  // console.log(req.originalUrl);
-  // console.log(req.originalUrl);
-  //   const collection = req.originalUrl.match(re)[0];
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
 
   try {
-    const dbResponse = await MongoWraper.ND_FindIDOnePopulated(
-      req.params._id,
+    // Extract assignments without mutating req.body
+    const { _Assign, ...bodyData } = req.body;
+    const asignaciones = _Assign || [];
+
+    // Object to save
+    const objToSave = {
+      ...bodyData,
+      datetime: new Date(),
+    };
+    // DEBUG: console.log(objToSave);
+
+    // Insert into DB
+    const dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, db);
+
+    // Process assignments
+    if (asignaciones.length > 0) {
+      const asignacionesConId = asignaciones.map((e) => ({
+        ...e,
+        [collection]: [dbResponse.insertedId],
+      }));
+
+      const promisesAssign = asignacionesConId.map((e) => Assign(e, db, db));
+      await Promise.allSettled(promisesAssign); // Changed to allSettled to avoid failing if one assignment fails
+    }
+
+    // Handle file upload if present in request
+    if (req.files?.file?.[0]) {
+      // Build destination path: /{basePath}/{db}/{collection}/{documentId}/
+      const dirDestino = `${PathBaseFile}/${db}/${collection}/${dbResponse.insertedId}/`;
+
+      // Create directory structure if it doesn't exist
+      if (!fs.existsSync(dirDestino)) {
+        await fs.promises.mkdir(dirDestino, { recursive: true });
+      }
+
+      const fotofile = req.files.file[0];
+      const pathDestino = dirDestino + fotofile.filename;
+
+      // Move file from temp to permanent location
+      await fs.promises.rename(fotofile.path, pathDestino);
+
+      // Build public URL for file access
+      const foto = `${URL}/${db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
+
+      // Update document with photo info
+      await MongoWraper.UpdateMongoBy_id(
+        dbResponse.insertedId,
+        {
+          foto,
+          fotopath: pathDestino,
+        },
+        collection,
+        db,
+      );
+
+      // Backwards compatibility
+      req.body.foto = foto;
+      req.body.fotopath = pathDestino;
+    }
+
+    // Fetch the complete document after all updates
+    const dbResponseFind = await MongoWraper.FindOne(
+      dbResponse.insertedId,
       collection,
-      db
+      db,
     );
 
+    // Execute after function if exists
+    if (AsyncFunctionAfter) {
+      await AsyncFunctionAfter(req, res, dbResponse);
+    }
+
+    // Prepare response
     const objResp = {
       status: "ok",
       message: "completed",
-      data: dbResponse == null ? {} : dbResponse,
+      data: dbResponseFind,
+      extra: req.extraresponse,
     };
+
+    // If middleware, pass to next
     if (Middleware) {
       req.MidResponse = objResp;
       return next();
     }
+
+    // Send response
     res.status(200).send(objResp);
   } catch (err) {
+    console.error("Error in create:", err);
+    throw new ApiErrorData(400, ApiErrorFailDb || "db error", err);
+  }
+};
+
+/**
+ * Retrieves distinct values for a specified field in a collection.
+ *
+ * Useful for getting unique values like categories, statuses, tags, etc.
+ * Returns an array of unique values for the specified field.
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {string} params.DistinctQuery - Field name to get distinct values from
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Get all unique status values
+ * app.get('/users/statuses', apiBuilder.distinct({
+ *   DistinctQuery: 'status'
+ * }));
+ * // Returns: { status: "ok", data: ["active", "inactive", "pending"] }
+ *
+ * @example
+ * // Get all unique categories from a specific collection
+ * app.get('/products/categories', apiBuilder.distinct({
+ *   Collection: 'products',
+ *   DistinctQuery: 'category'
+ * }));
+ *
+ * @example
+ * // As middleware to transform response
+ * app.get('/tags/unique',
+ *   apiBuilder.distinct({ DistinctQuery: 'tag', Middleware: true }),
+ *   (req, res) => {
+ *     const tags = req.MidResponse.data;
+ *     res.json({ tags: tags.sort() });
+ *   }
+ * );
+ */
+const distinct = (params) => async (req, res, next) => {
+  params = params || {};
+  const { Database, Collection, DistinctQuery, Middleware } = params;
+
+  // Resolve collection and database from params or request context
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  // DEBUG: console.log("collection:", collection);
+  // DEBUG: console.log("db:", db);
+
+  try {
+    // Get distinct values for the specified field
+    const dbResponse = await MongoWraper.Distinct(
+      DistinctQuery,
+      collection,
+      db,
+    );
+
+    // DEBUG: console.log("Distinct values:", dbResponse);
+
+    // Build standard response object
+    // Returns empty object if no distinct values found
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: dbResponse ?? {},
+    };
+
+    // Middleware mode: attach response to request and continue chain
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    res.status(200).send(objResp);
+  } catch (err) {
+    // Log error for debugging purposes
+    console.error("Error in distinct:", err);
+
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
+    };
+    res.status(500).send(objResp);
+  }
+};
+
+/**
+ * Lists documents from a collection with optional filtering, pagination, and date range.
+ *
+ * Supports two modes:
+ * - With query params: Returns paginated results with text search filters
+ * - Without query params: Returns all documents with automatic population
+ *
+ * Automatically excludes soft-deleted documents (status: "deleted") and hidden
+ * documents (oculta: true) unless explicitly requested via showdeleted/showoculta params.
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage - returns all documents
+ * app.get('/users', apiBuilder.list());
+ *
+ * @example
+ * // With pagination
+ * // GET /users?page=0&limit=10
+ *
+ * @example
+ * // With text search (searches with regex)
+ * // GET /users?name=john&email=gmail
+ *
+ * @example
+ * // With date range filter (filters by document creation date via ObjectId)
+ * // GET /users?initialDate=2024-01-01&finalDate=2024-12-31
+ *
+ * @example
+ * // Include soft-deleted or hidden documents
+ * // GET /users?showdeleted=true&showoculta=true
+ */
+const list = (params) => async (req, res, next) => {
+  params = params || {};
+  const { Database, Collection, Middleware } = params;
+
+  // Resolve collection and database from params or request context
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  // DEBUG: console.log("collection", collection);
+
+  // Check if user has custom ordering preferences for this collection
+  // Used to track "last used" items for UI sorting purposes
+  const hasOrder = req.user?.order?.[collection] || {};
+  // DEBUG: console.log("hasOrder:", hasOrder);
+
+  // Preserve original query to check for showdeleted/showoculta flags
+  const queryFull = { ...req.query };
+
+  // Remove special flags from query before processing filters
+  // These flags control visibility, not filtering
+  delete req.query.showdeleted;
+  delete req.query.showoculta;
+
+  const sizeQuery = sizeObj(req.query);
+
+  /**
+   * Adds lastUse timestamp to each document based on user's ordering preferences.
+   * Used by frontend to sort recently used items first.
+   * @param {Array} documents - Array of MongoDB documents
+   * @returns {Array} Documents with lastUse field added
+   */
+  const addLastUseToDocuments = (documents) => {
+    return documents.map((doc) => ({
+      ...doc,
+      lastUse: hasOrder[doc._id] ?? 0,
+    }));
+  };
+
+  /**
+   * Builds the base query with soft delete and hidden document filters.
+   * @returns {Object} MongoDB query object
+   */
+  const buildBaseQuery = () => ({
+    $and: [
+      queryFull.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted,
+      queryFull.hasOwnProperty("showoculta") ? {} : Oculta,
+    ],
+  });
+
+  try {
+    // Branch: With query parameters (filtered/paginated results)
+    if (sizeQuery > 0) {
+      const page = parseInt(req.query.page) || 0;
+      const limit = parseInt(req.query.limit);
+
+      // Build text search filters from query params
+      // Each param becomes a regex search: ?name=john -> { name: { $regex: "john", $options: "si" } }
+      const andArr = CreateAndArr(req);
+      const fullAndArray = andArr.reduce((acum, arr) => [...acum, ...arr], []);
+
+      // Construct MongoDB query with all filters
+      const query = {
+        $and: [
+          ...fullAndArray,
+          queryFull.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted,
+          queryFull.hasOwnProperty("showoculta") ? {} : Oculta,
+        ],
+      };
+
+      // DEBUG: console.log("Query with filters:", query);
+
+      // Add date range filter if provided
+      // Uses ObjectId timestamp extraction for filtering by creation date
+      if (req.query.initialDate || req.query.finalDate) {
+        query.$and.push({
+          _id: {
+            $gte: objectIdWithTimestamp(req.query.initialDate),
+            $lt: objectIdWithTimestamp(req.query.finalDate),
+          },
+        });
+      }
+
+      // If query only has empty objects in $and, use empty query instead
+      // This handles the case where no actual filters were provided
+      const emptyQuery = { $and: [] };
+      const finalQuery =
+        JSON.stringify(emptyQuery) === JSON.stringify(query) ? {} : query;
+
+      // DEBUG: console.log("Final query:", JSON.stringify(finalQuery));
+
+      // Execute paginated query
+      const dbResponse = await MongoWraper.FindPaginated(
+        finalQuery,
+        page,
+        limit,
+        collection,
+        db,
+      );
+
+      // Add lastUse field for UI sorting
+      const data = addLastUseToDocuments(dbResponse);
+
+      const objResp = {
+        status: "ok",
+        message: "completed",
+        rows: data.length,
+        data,
+      };
+
+      if (Middleware) {
+        req.MidResponse = objResp;
+        return next();
+      }
+
+      res.status(200).send(objResp);
+    } else {
+      // Branch: Without query parameters (return all with population)
+      const query = buildBaseQuery();
+
+      // Fetch all documents with automatic population of references
+      const dbResponse = await MongoWraper.PopulateAuto(query, collection, db);
+
+      // Add lastUse field for UI sorting
+      const data = addLastUseToDocuments(dbResponse);
+
+      const objResp = {
+        status: "ok",
+        message: "completed",
+        rows: data.length,
+        data,
+      };
+
+      if (Middleware) {
+        req.MidResponse = objResp;
+        return next();
+      }
+
+      res.status(200).send(objResp);
+    }
+  } catch (err) {
+    // Log error for debugging purposes
+    console.error("Error in list:", err);
+
     const objResp = {
       status: "error",
       message: "db error",
@@ -429,6 +696,735 @@ const listOne = (params) => async (req, res, next) => {
   }
 };
 
+/**
+ * Advanced filtered list with aggregation pipeline support.
+ *
+ * Provides powerful querying capabilities including:
+ * - Multiple filter types (_id, _string, _partial, _boolean, _neid, _nestring, _integer)
+ * - Date range filtering
+ * - Field projection (select specific fields)
+ * - Sorting (ascending/descending)
+ * - Lookups/population of related collections
+ * - Field concatenation
+ * - Pagination with metadata (total count, hasMore flag)
+ *
+ * Supports both GET (query params) and POST (body) requests.
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage
+ * app.get('/users/filter', apiBuilder.listFilter());
+ *
+ * @example
+ * // Filter by ObjectId
+ * // GET /users/filter?roles_id=507f1f77bcf86cd799439011
+ *
+ * @example
+ * // Partial text search (regex)
+ * // GET /users/filter?name_partial=john
+ *
+ * @example
+ * // Exact string match
+ * // GET /users/filter?status_string=active
+ *
+ * @example
+ * // Boolean filter
+ * // GET /users/filter?isAdmin_boolean=true
+ *
+ * @example
+ * // Not equal filters
+ * // GET /users/filter?role_neid=507f1f77bcf86cd799439011
+ * // GET /users/filter?status_nestring=deleted
+ *
+ * @example
+ * // Pagination with sorting
+ * // GET /users/filter?page=0&limit=10&sortMongoDec=createdAt
+ *
+ * @example
+ * // Field projection (only return specific fields)
+ * // GET /users/filter?projectMongo=name&projectMongo=email
+ *
+ * @example
+ * // Lookup/populate related collection
+ * // GET /users/filter?lookup=roles
+ *
+ * @example
+ * // Date range filter
+ * // GET /users/filter?initialDate=2024-01-01&finalDate=2024-12-31&propertydatefilter=createdAt
+ */
+const listFilter = (params) => async (req, res, next) => {
+  params = params || {};
+  const { Database, Collection, Middleware } = params;
+
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  // Support both GET (query params) and POST (body) requests
+  if (req.method === "POST") {
+    req.query = req.body;
+  }
+
+  const page = parseInt(req.query.page) || 0;
+  const limit = parseInt(req.query.limit);
+
+  // Use helper functions
+  const projectMongo = buildProjection(req.query);
+  const { concatName, concatMongo } = buildConcatenation(req.query);
+  const sortMongo = buildSortConfig(req.query);
+
+  // Pass query functions as dependency injection
+  const queryFunctions = {
+    GetGenericQueryId,
+    GetGenericQueryString,
+    GetGenericQueryBool,
+    GetGenericQueryNeid,
+    GetGenericQueryNestring,
+    GetGenericQueryPartial,
+  };
+
+  const filters = buildAllFilters(req.query, queryFunctions);
+  const lookupBuilder = buildLookupStages(req.query);
+  const propertyDateFilter = req.query.propertydatefilter || "datetime";
+  const queryDate = buildDateRangeQuery(req.query, propertyDateFilter);
+  const afterMatch = buildAfterMatchStage(req.query, queryFunctions);
+
+  // Check if any filters are active
+  const hasFilters = hasActiveFilters(filters, queryDate);
+
+  // Build main $match stage
+  const mainMatch = {
+    $match: {
+      ...(req.query.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted),
+      ...(req.query.hasOwnProperty("showoculta") ? {} : Oculta),
+      ...(hasFilters
+        ? {
+            $and: [
+              ...filters.stringQueries,
+              ...filters.integerQueries,
+              ...filters.boolQueries,
+              ...filters.idQueries,
+              ...filters.neidQueries,
+              ...filters.nestringQueries,
+              ...(filters.partialBuilders.length > 0
+                ? [
+                    {
+                      $or: filters.partialBuilders.map((e) =>
+                        GetGenericQueryPartial(e),
+                      ),
+                    },
+                  ]
+                : []),
+              ...queryDate,
+            ],
+          }
+        : {}),
+    },
+  };
+
+  // Build aggregation pipeline
+  const aggregationPipeline = [
+    ...(concatMongo
+      ? [{ $addFields: { [concatName]: { $concat: concatMongo } } }]
+      : []),
+    mainMatch,
+    ...lookupBuilder,
+    afterMatch,
+    ...(Object.keys(projectMongo).length > 0
+      ? [{ $project: projectMongo }]
+      : []),
+    { $sort: Object.keys(sortMongo).length > 0 ? sortMongo : { _id: -1 } },
+    ...(limit > 0 ? [buildFacetStage(page, limit)] : []),
+  ];
+
+  try {
+    const dbResponse = await MongoWraper.AggregationMongo(
+      aggregationPipeline,
+      collection,
+      db,
+    );
+
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: formatPaginatedResponse(dbResponse, limit, page),
+    };
+
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    res.status(200).send(objResp);
+  } catch (err) {
+    console.error("Error in listFilter:", err);
+
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
+    };
+    res.status(500).send(objResp);
+  }
+};
+
+/**
+ * Advanced filtered list with extended comparison operators and flexible lookups.
+ *
+ * Extends listFilter with:
+ * - Integer comparison operators (_igt, _igte, _ilt, _ilte)
+ * - Date comparison operators (_dgt, _dgte, _dlt, _dlte)
+ * - Flexible lookup configuration (specify which field to use for join)
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage
+ * app.get('/users/filter2', apiBuilder.listFilter2());
+ *
+ * @example
+ * // Integer comparisons
+ * // GET /users/filter2?age_igtei=18      -> age > 18
+ * // GET /users/filter2?age_igtei=18      -> age >= 18
+ * // GET /users/filter2?age_ilti=65       -> age < 65
+ * // GET /users/filter2?age_iltei=65      -> age <= 65
+ *
+ * @example
+ * // Date comparisons
+ * // GET /users/filter2?createdAt_dgtd=2024-01-01    -> createdAt > date
+ * // GET /users/filter2?createdAt_dgted=2024-01-01   -> createdAt >= date
+ * // GET /users/filter2?createdAt_dltd=2024-12-31   -> createdAt < date
+ * // GET /users/filter2?createdAt_dlted=2024-12-31  -> createdAt <= date
+ *
+ * @example
+ * // Flexible lookup (specify which field to join on)
+ * // GET /users/filter2?roles_lookup=assignedRole_id
+ * // Joins roles collection using assignedRole_id field instead of default roles_id
+ */
+const listFilter2 = (params) => async (req, res, next) => {
+  params = params || {};
+  const { Database, Collection, Middleware } = params;
+
+  // Resolve collection and database from params or request context
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  // Support both GET (query params) and POST (body) requests
+  if (req.method === "POST") {
+    req.query = req.body;
+  }
+
+  // DEBUG: console.log("path:", req.originalUrl);
+  // DEBUG: console.log("collection:", collection);
+
+  // Extract pagination params
+  const page = parseInt(req.query.page) || 0;
+  const limit = parseInt(req.query.limit);
+
+  // Use helper functions for common operations
+  const projectMongo = buildProjection(req.query);
+  const { concatName, concatMongo } = buildConcatenation(req.query);
+  const sortMongo = buildSortConfig(req.query);
+  // DEBUG: console.log("Sort config:", sortMongo);
+
+  // Pass query functions as dependency injection
+  const queryFunctions = {
+    GetGenericQueryId,
+    GetGenericQueryString,
+    GetGenericQueryBool,
+    GetGenericQueryNeid,
+    GetGenericQueryNestring,
+    GetGenericQueryPartial,
+  };
+
+  // Pass comparison functions as dependency injection
+  const comparisonFunctions = {
+    GetGenericComparisonQuery,
+    GetDateComparisonQuery,
+  };
+
+  // Build all filter queries from request params
+  const filters = buildAllFilters(req.query, queryFunctions);
+
+  // Build comparison filters (integers and dates)
+  // This is the main difference from listFilter
+  const comparisonFilters = buildComparisonFilters(
+    req.query,
+    comparisonFunctions,
+  );
+
+  // Use extended lookup builder that allows specifying the join field
+  // Example: ?roles_lookup=customField_id joins on customField_id instead of roles_id
+  const lookupBuilder = buildLookupStagesExtended(req.query);
+
+  // Build date range filter if provided
+  const propertyDateFilter = req.query.propertydatefilter || "datetime";
+  const queryDate = buildDateRangeQuery(req.query, propertyDateFilter);
+
+  // Build post-lookup filters
+  const afterMatch = buildAfterMatchStage(req.query, queryFunctions);
+
+  // Check if any filters are active (including comparison filters)
+  const hasFilters = hasActiveFiltersExtended(
+    filters,
+    comparisonFilters,
+    queryDate,
+  );
+
+  // Build main $match stage with all filters including comparisons
+  const mainMatch = {
+    $match: {
+      // Exclude soft-deleted documents unless showdeleted is set
+      ...(req.query.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted),
+      // Exclude hidden documents unless showoculta is set
+      ...(req.query.hasOwnProperty("showoculta") ? {} : Oculta),
+      // Add all filters if any exist
+      ...(hasFilters
+        ? {
+            $and: [
+              // Basic filters
+              ...filters.stringQueries,
+              ...filters.integerQueries,
+              ...filters.boolQueries,
+              ...filters.idQueries,
+              ...filters.neidQueries,
+              ...filters.nestringQueries,
+              // Integer comparison filters
+              ...comparisonFilters.gtQueries,
+              ...comparisonFilters.gteQueries,
+              ...comparisonFilters.ltQueries,
+              ...comparisonFilters.lteQueries,
+              // Date comparison filters
+              ...comparisonFilters.gtDateQueries,
+              ...comparisonFilters.gteDateQueries,
+              ...comparisonFilters.ltDateQueries,
+              ...comparisonFilters.lteDateQueries,
+              // Partial/regex match filters
+              ...(filters.partialBuilders.length > 0
+                ? [
+                    {
+                      $or: filters.partialBuilders.map((e) =>
+                        GetGenericQueryPartial(e),
+                      ),
+                    },
+                  ]
+                : []),
+              // Date range filter
+              ...queryDate,
+            ],
+          }
+        : {}),
+    },
+  };
+
+  // Construct the complete aggregation pipeline
+  const aggregationPipeline = [
+    // Add computed concatenated fields if configured
+    ...(concatMongo
+      ? [{ $addFields: { [concatName]: { $concat: concatMongo } } }]
+      : []),
+    // Main filter stage
+    mainMatch,
+    // Lookup stages for population (using extended builder)
+    ...lookupBuilder,
+    // Post-lookup filter stage
+    afterMatch,
+    // Field projection if configured
+    ...(Object.keys(projectMongo).length > 0
+      ? [{ $project: projectMongo }]
+      : []),
+    // Sorting (defaults to newest first by _id)
+    { $sort: Object.keys(sortMongo).length > 0 ? sortMongo : { _id: -1 } },
+    // Pagination with metadata (only if limit is set)
+    ...(limit > 0 ? [buildFacetStage(page, limit)] : []),
+  ];
+
+  // DEBUG: console.log("Aggregation pipeline:", JSON.stringify(aggregationPipeline, null, 2));
+
+  try {
+    // DEBUG: console.log("page:", page, "limit:", limit, "collection:", collection);
+
+    const dbResponse = await MongoWraper.AggregationMongo(
+      aggregationPipeline,
+      collection,
+      db,
+    );
+
+    // DEBUG: console.log("DB Response:", dbResponse);
+
+    // Format response based on whether pagination was used
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: formatPaginatedResponse(dbResponse, limit, page),
+    };
+
+    // Middleware mode: attach response to request and continue chain
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    res.status(200).send(objResp);
+  } catch (err) {
+    // Log error for debugging purposes
+    console.error("Error in listFilter2:", err);
+
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
+    };
+    res.status(500).send(objResp);
+  }
+};
+
+/**
+ * Retrieves a single document by its _id with automatic population of related documents.
+ *
+ * Uses ND_FindIDOnePopulated which populates all fields ending with "_id"
+ * that reference other collections (e.g., user_id, roles_id).
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage
+ * app.get('/users/:_id', apiBuilder.listOne());
+ *
+ * @example
+ * // With custom collection
+ * app.get('/profile/:_id', apiBuilder.listOne({
+ *   Collection: 'users'
+ * }));
+ *
+ * @example
+ * // As middleware to transform response
+ * app.get('/users/:_id',
+ *   apiBuilder.listOne({ Middleware: true }),
+ *   (req, res) => {
+ *     const user = req.MidResponse.data;
+ *     res.json({ ...user, fullName: `${user.firstName} ${user.lastName}` });
+ *   }
+ * );
+ */
+const listOne = (params) => async (req, res, next) => {
+  params = params || {};
+  const { Database, Collection, Middleware } = params;
+
+  // Resolve collection and database from params or request context
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  try {
+    // Fetch document by _id with automatic population of referenced documents
+    // ND = "Not Deleted" - excludes documents with status: "deleted"
+    const dbResponse = await MongoWraper.ND_FindIDOnePopulated(
+      req.params._id,
+      collection,
+      db,
+    );
+
+    // Build standard response object
+    // Returns empty object if document not found (instead of null)
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: dbResponse ?? {}, // Returns {} ONLY if dbResponse is null or undefined
+    };
+
+    // Middleware mode: attach response to request and continue chain
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    res.status(200).send(objResp);
+  } catch (err) {
+    // Log error for debugging purposes
+    console.error("Error in listOne:", err);
+
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
+    };
+    res.status(400).send(objResp);
+  }
+};
+
+/**
+ * Performs a soft delete on a document by setting its status to "deleted".
+ *
+ * Supports cascading soft deletes to related collections via _RecursiveDelete
+ * and removing references from other collections via _Unassign.
+ * The document is not physically removed from the database.
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {string} [params.PathBaseFile] - Base path for file storage (unused but kept for consistency)
+ * @param {string} [params.URL] - Base URL for file access (unused but kept for consistency)
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage - just soft deletes the document
+ * app.delete('/users/:_id', apiBuilder.remove());
+ *
+ * @example
+ * // With recursive delete and unassign in request body
+ * // DELETE /users/123
+ * // {
+ * //   "_RecursiveDelete": ["posts", "comments"],  // Soft delete related documents
+ * //   "_Unassign": ["roles", "teams"]             // Remove user reference from these collections
+ * // }
+ */
+const remove = (params) => async (req, res, next) => {
+  params = params || {};
+  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
+
+  // Resolve collection and database from params or request context
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  try {
+    // Extract special fields for cascade operations without mutating req.body
+    // _RecursiveDelete: array of collection names to cascade soft delete
+    // _Unassign: array of collection names to remove references from
+    const { _Unassign, _RecursiveDelete } = req.body || {};
+    const desasignaciones = _Unassign || [];
+    const recursiveDelete = _RecursiveDelete || [];
+
+    // Perform soft delete (sets status: "deleted" on the document)
+    // Document remains in DB but won't appear in normal queries
+    const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
+      req.params._id,
+      collection,
+      db,
+    );
+
+    // Process recursive deletes in related collections
+    if (recursiveDelete.length > 0) {
+      const promisesRecursiveDelete = recursiveDelete.map((collectionDelete) =>
+        MongoWraper.UpdateMongoMany(
+          { [collection + "_id"]: req.params._id },
+          { status: "deleted" },
+          collectionDelete,
+          db,
+        ),
+      );
+
+      // Using allSettled to prevent one failed delete from breaking others
+      await Promise.allSettled(promisesRecursiveDelete);
+    }
+
+    // Process unassignments
+    if (desasignaciones.length > 0) {
+      const promisesUnAssign = desasignaciones.map((collectionDelete) =>
+        UnAssignIdToCollections(
+          collectionDelete,
+          collection,
+          req.params._id,
+          db,
+        ),
+      );
+
+      // Using allSettled to prevent one failed unassign from breaking others
+      await Promise.allSettled(promisesUnAssign);
+    }
+
+    // Build standard response object
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: dbResponse,
+    };
+
+    // If middleware, pass to next
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    // Send response
+    res.status(200).send(objResp);
+  } catch (err) {
+    console.error("Error in remove:", err);
+
+    // Handle error properly
+    const objResp = {
+      status: "error",
+      message: "db error",
+      data: err,
+    };
+    res.status(400).send(objResp);
+  }
+};
+
+/**
+ * Updates an existing document in the specified MongoDB collection using PATCH semantics.
+ *
+ * Supports partial updates, file uploads, and bidirectional relationship management
+ * through _Assign and _UnAssign special fields.
+ *
+ * @param {Object} params - Configuration options
+ * @param {string} [params.Database] - Database name (defaults to req.database)
+ * @param {string} [params.Collection] - Collection name (defaults to URL path)
+ * @param {string} [params.PathBaseFile] - Base path for file storage
+ * @param {string} [params.URL] - Base URL for file access
+ * @param {string} [params.ApiErrorFailDb] - Custom error message for DB failures
+ * @param {Function} [params.AsyncFunctionAfter] - Callback executed after document update
+ * @param {boolean} [params.Middleware] - If true, passes response to next() instead of sending
+ *
+ * @returns {Function} Express middleware function
+ *
+ * @example
+ * // Basic usage
+ * app.patch('/users/:_id', apiBuilder.updatePatch());
+ *
+ * @example
+ * // With assignments and unassignments in request body
+ * // PATCH /users/123
+ * // {
+ * //   "name": "John",
+ * //   "_Assign": [{ "roles": ["roleId1", "roleId2"] }],
+ * //   "_UnAssign": [{ "roles": ["oldRoleId"] }]
+ * // }
+ */
+const updatePatch = (params) => async (req, res, next) => {
+  params = params ? params : {};
+  const {
+    Database,
+    Collection,
+    PathBaseFile,
+    URL,
+    ApiErrorFailDb,
+    AsyncFunctionAfter,
+    Middleware,
+  } = params;
+
+  // Resolve collection and database from params or request context
+  const collection = Collection || req.originalUrl.match(re)[0];
+  const db = Database || req.database;
+
+  try {
+    // Extract special fields for relationship management without mutating req.body
+    // _Assign: creates new relationships between collections
+    // _UnAssign: removes existing relationships between collections
+    const { _Assign, _UnAssign, ...bodyData } = req.body;
+    const asignaciones = _Assign || [];
+    const desasignaciones = _UnAssign || [];
+
+    // Update document with provided fields (partial update)
+    const dbResponse = await MongoWraper.UpdateMongoBy_id(
+      req.params._id,
+      bodyData,
+      collection,
+      db,
+    );
+
+    // Process new assignments (add references to related collections)
+    // Example: assigning new roles to a user
+    if (asignaciones.length > 0) {
+      const asignacionesConId = asignaciones.map((e) => ({
+        ...e,
+        [collection]: [req.params._id],
+      }));
+
+      const promisesAssign = asignacionesConId.map((e) => Assign(e, db, db));
+      await Promise.allSettled(promisesAssign);
+    }
+
+    // Process unassignments (remove references from related collections)
+    // Example: removing roles from a user
+    if (desasignaciones.length > 0) {
+      const desasignacionesConId = desasignaciones.map((e) => ({
+        ...e,
+        [collection]: [req.params._id],
+      }));
+
+      const promisesUnAssign = desasignacionesConId.map((e) =>
+        UnAssign(e, db, db),
+      );
+      await Promise.allSettled(promisesUnAssign);
+    }
+
+    // Execute custom callback if provided (e.g., invalidate cache, send notifications)
+    if (AsyncFunctionAfter) {
+      await AsyncFunctionAfter(req, res, dbResponse);
+    }
+
+    // Handle file upload if present in request
+    if (req.files?.file?.[0]) {
+      // Build destination path: /{basePath}/{db}/{collection}/{documentId}/
+      const dirDestino = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
+
+      // Create directory structure if it doesn't exist
+      if (!fs.existsSync(dirDestino)) {
+        await fs.promises.mkdir(dirDestino, { recursive: true });
+      }
+
+      const fotofile = req.files.file[0];
+      const pathDestino = dirDestino + fotofile.filename;
+
+      // Move file from temp to permanent location
+      await fs.promises.rename(fotofile.path, pathDestino);
+
+      // Build public URL for file access
+      const foto = `${URL}/${db}/${collection}/${req.params._id}/${fotofile.filename}`;
+
+      // Update document with new file references
+      await MongoWraper.UpdateMongoBy_id(
+        req.params._id,
+        {
+          foto,
+          fotopath: pathDestino,
+        },
+        collection,
+        db,
+      );
+    }
+
+    // Build standard response object
+    const objResp = {
+      status: "ok",
+      message: "completed",
+      data: dbResponse,
+    };
+
+    // Middleware mode: attach response to request and continue chain
+    if (Middleware) {
+      req.MidResponse = objResp;
+      return next();
+    }
+
+    res.status(200).send(objResp);
+  } catch (err) {
+    // Log error for debugging purposes
+    console.error("Error in updatePatch:", err);
+
+    // Throw ApiError to be handled by error middleware
+    throw new ApiErrorData(400, ApiErrorFailDb || "db error", err);
+  }
+};
+
+// -------- methods without clean code refactor, to be refactored later --------------
 const createMultipleCore = (params) => async (req, res, next) => {
   params = params ? params : {};
   const {
@@ -467,7 +1463,7 @@ const createMultipleCore = (params) => async (req, res, next) => {
     throw new ApiErrorData(
       400,
       ApiErrorFailDb ? ApiErrorFailDb : "db error",
-      err
+      err,
     );
   }
 
@@ -512,7 +1508,7 @@ const createMultipleCore = (params) => async (req, res, next) => {
         fotopath: pathDestino,
       },
       collection,
-      db
+      db,
     );
 
     req.body.foto = foto;
@@ -522,7 +1518,7 @@ const createMultipleCore = (params) => async (req, res, next) => {
   const dbResponseFind = await MongoWraper.FindOne(
     dbResponse.insertedId,
     collection,
-    db
+    db,
   );
 
   if (AsyncFunctionAfter) {
@@ -542,230 +1538,6 @@ const createMultipleCore = (params) => async (req, res, next) => {
     return next();
   }
   return objResp;
-};
-
-const create = (params) => async (req, res, next) => {
-  params = params || {};
-  const {
-    Database,
-    Collection,
-    PathBaseFile,
-    URL,
-    ApiErrorFailDb,
-    AsyncFunctionAfter,
-    Middleware,
-  } = params;
-
-  const collection = Collection || req.originalUrl.match(re)[0];
-  const db = Database || req.database;
-
-  try {
-    // Extract assignments without mutating req.body
-    const { _Assign, ...bodyData } = req.body;
-    const asignaciones = _Assign || [];
-
-    // Object to save
-    const objToSave = {
-      ...bodyData,
-      datetime: new Date(),
-    };
-    console.log(objToSave);
-
-    // Insert into DB
-    const dbResponse = await MongoWraper.SavetoMongo(objToSave, collection, db);
-
-    // Process assignments
-    if (asignaciones.length > 0) {
-      const asignacionesConId = asignaciones.map((e) => ({
-        ...e,
-        [collection]: [dbResponse.insertedId],
-      }));
-
-      const promisesAssign = asignacionesConId.map((e) => Assign(e, db, db));
-      await Promise.allSettled(promisesAssign); // Changed to allSettled to avoid failing if one assignment fails
-    }
-
-    // Process files if they exist
-    if (req.files && req.files.file && req.files.file[0]) {
-      const dirDestino = `${PathBaseFile}/${db}/${collection}/${dbResponse.insertedId}/`;
-
-      // Create directory if it doesn't exist
-      if (!fs.existsSync(dirDestino)) {
-        await fs.promises.mkdir(dirDestino, { recursive: true });
-      }
-
-      const fotofile = req.files.file[0];
-      const pathDestino = dirDestino + fotofile.filename;
-
-      // Move file asynchronously
-      await fs.promises.rename(fotofile.path, pathDestino);
-
-      // Photo URL
-      const foto = `${URL}/${db}/${collection}/${dbResponse.insertedId}/${fotofile.filename}`;
-
-      // Update document with photo info
-      await MongoWraper.UpdateMongoBy_id(
-        dbResponse.insertedId,
-        {
-          foto: foto,
-          fotopath: pathDestino,
-        },
-        collection,
-        db
-      );
-
-      // Add to req.body for backwards compatibility
-      req.body.foto = foto;
-      req.body.fotopath = pathDestino;
-    }
-
-    // Get updated document
-    const dbResponseFind = await MongoWraper.FindOne(
-      dbResponse.insertedId,
-      collection,
-      db
-    );
-
-    // Execute after function if exists
-    if (AsyncFunctionAfter) {
-      await AsyncFunctionAfter(req, res, dbResponse);
-    }
-
-    // Prepare response
-    const objResp = {
-      status: "ok",
-      message: "completed",
-      data: dbResponseFind,
-      extra: req.extraresponse,
-    };
-
-    // If middleware, pass to next
-    if (Middleware) {
-      req.MidResponse = objResp;
-      return next();
-    }
-
-    // Send response
-    res.status(200).send(objResp);
-  } catch (err) {
-    console.error("Error in create:", err);
-
-    // Handle error properly
-    throw new ApiErrorData(400, ApiErrorFailDb || "db error", err);
-  }
-};
-
-const updatePatch = (params) => async (req, res, next) => {
-  params = params ? params : {};
-  const {
-    Database,
-    Collection,
-    PathBaseFile,
-    URL,
-    ApiErrorFailDb,
-    AsyncFunctionAfter,
-    Middleware,
-  } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-
-  // const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  // const Db = Database ? Database : req.database;
-
-  //Guadando asignaciones para que no se inserten junto con el body
-  let Asignaciones = req.body.hasOwnProperty("_Assign") ? req.body._Assign : [];
-
-  delete req.body._Assign;
-
-  let DesAsignaciones = req.body.hasOwnProperty("_UnAssign")
-    ? req.body._UnAssign
-    : [];
-
-  delete req.body._UnAssign;
-
-  let dbResponse;
-  try {
-    dbResponse = await MongoWraper.UpdateMongoBy_id(
-      req.params._id,
-      req.body,
-      collection,
-      db
-    );
-  } catch (err) {
-    console.log(err);
-
-    throw new ApiErrorData(
-      400,
-      ApiErrorFailDb ? ApiErrorFailDb : "db error",
-      err
-    );
-  }
-
-  Asignaciones = Asignaciones.map((e) => {
-    //   {
-    //     "asistencias": ["61f801cdb6153a0034c123ec"]
-    // collection:[id]
-    //   }
-    return { ...e, [collection]: [req.params._id] };
-  });
-  //
-
-  const PromisesAssign = Asignaciones.map((e) => Assign(e, db, db));
-
-  await Promise.all(PromisesAssign);
-
-  DesAsignaciones = DesAsignaciones.map((e) => {
-    //   {
-    //     "asistencias": ["61f801cdb6153a0034c123ec"]
-    // collection:[id]
-    //   }
-    return { ...e, [collection]: [req.params._id] };
-  });
-  //
-
-  const PromisesUnAssign = DesAsignaciones.map((e) => UnAssign(e, db, db));
-
-  await Promise.all(PromisesUnAssign);
-
-  //ejecutando funcion extra si es requerido
-  if (AsyncFunctionAfter) {
-    await AsyncFunctionAfter(req, res, dbResponse);
-  }
-
-  //Si venia un archivo y paso por todo lo movemos a su lugar definitivo
-  if (req.files) {
-    // const dirDestino = `${__basedir}/files/${Db}/${collection}/${req.params._id}/`;
-    const dirDestino = `${PathBaseFile}/${db}/${collection}/${req.params._id}/`;
-    if (!fs.existsSync(dirDestino)) {
-      fs.mkdirSync(dirDestino, { recursive: true });
-    }
-    const fotofile = req.files.file[0];
-    const pathDestino = dirDestino + fotofile.filename;
-    fs.renameSync(fotofile.path, pathDestino);
-    //actualizando el directorio al que se movio
-
-    await MongoWraper.UpdateMongoBy_id(
-      req.params._id,
-      {
-        // foto: `${ipServer}/api/v1/rules/fs/files/${Db}/${collection}/${req.params._id}/${fotofile.filename}`,
-        foto: `${URL}/${db}/${collection}/${req.params._id}/${fotofile.filename}`,
-        fotopath: pathDestino,
-      },
-      collection,
-      db
-    );
-  }
-
-  const objResp = {
-    status: "ok",
-    message: "completed",
-    data: dbResponse,
-  };
-  if (Middleware) {
-    req.MidResponse = objResp;
-    return next();
-  }
-  res.status(200).send(objResp);
 };
 
 const updatePatchMany = (params) => async (req, res, next) => {
@@ -793,7 +1565,7 @@ const updatePatchMany = (params) => async (req, res, next) => {
       req.body.query,
       req.body.newProperties,
       collection,
-      db
+      db,
     );
   } catch (err) {
     console.log(err);
@@ -801,7 +1573,7 @@ const updatePatchMany = (params) => async (req, res, next) => {
     throw new ApiErrorData(
       400,
       ApiErrorFailDb ? ApiErrorFailDb : "db error",
-      err
+      err,
     );
   }
 
@@ -815,80 +1587,6 @@ const updatePatchMany = (params) => async (req, res, next) => {
     return next();
   }
   res.status(200).send(objResp);
-};
-
-const remove = (params) => async (req, res, next) => {
-  params = params || {};
-  const { Database, Collection, PathBaseFile, URL, Middleware } = params;
-
-  const collection = Collection || req.originalUrl.match(re)[0];
-  const db = Database || req.database;
-
-  try {
-    // Extract unassignments and recursive deletes without mutating req.body
-    const { _Unassign, _RecursiveDelete, ...bodyData } = req.body;
-    const desasignaciones = _Unassign || [];
-    const recursiveDelete = _RecursiveDelete || [];
-
-    // Delete document from DB (soft delete)
-    const dbResponse = await MongoWraper.ND_DeleteMongoby_id(
-      req.params._id,
-      collection,
-      db
-    );
-
-    // Process recursive deletes in related collections
-    if (recursiveDelete.length > 0) {
-      const promisesRecursiveDelete = recursiveDelete.map((collectionDelete) =>
-        MongoWraper.UpdateMongoMany(
-          { [collection + "_id"]: req.params._id },
-          { status: "deleted" },
-          collectionDelete,
-          db
-        )
-      );
-      await Promise.allSettled(promisesRecursiveDelete); // Changed to allSettled to avoid failing if one operation fails
-    }
-
-    // Process unassignments
-    if (desasignaciones.length > 0) {
-      const promisesUnAssign = desasignaciones.map((collectionDelete) =>
-        UnAssignIdToCollections(
-          collectionDelete,
-          collection,
-          req.params._id,
-          db
-        )
-      );
-      await Promise.allSettled(promisesUnAssign); // Changed to allSettled to avoid failing if one operation fails
-    }
-
-    // Prepare response
-    const objResp = {
-      status: "ok",
-      message: "completed",
-      data: dbResponse,
-    };
-
-    // If middleware, pass to next
-    if (Middleware) {
-      req.MidResponse = objResp;
-      return next();
-    }
-
-    // Send response
-    res.status(200).send(objResp);
-  } catch (err) {
-    console.error("Error in remove:", err);
-
-    // Handle error properly
-    const objResp = {
-      status: "error",
-      message: "db error",
-      data: err,
-    };
-    res.status(400).send(objResp);
-  }
 };
 
 // Agrega icono
@@ -948,7 +1646,7 @@ const docUpload = (params) => async (req, res, next) => {
         req.params._id,
         newProperty,
         collection,
-        db
+        db,
       ).catch((err) => {
         const objResp = {
           status: "error",
@@ -963,7 +1661,7 @@ const docUpload = (params) => async (req, res, next) => {
       const dbFind = await MongoWraper.FindIDOne(
         req.params._id,
         collection,
-        req.database
+        req.database,
       );
 
       const objResp = {
@@ -1017,13 +1715,13 @@ const docRemove = (params) => async (req, res, next) => {
         req.params._id,
         req.body.name,
         collection,
-        db
+        db,
       );
 
       const lastFind = await MongoWraper.FindIDOne(
         req.params._id,
         collection,
-        db
+        db,
       );
 
       const objResp = {
@@ -1130,7 +1828,7 @@ const removePropertyId = (params) => async (req, res, next) => {
     req.params._id,
     req.body.propertyToRemove,
     collection,
-    db
+    db,
   );
   const objResp = {
     status: "ok",
@@ -1173,7 +1871,7 @@ const fileUpload = (params) => async (req, res, next) => {
     const DocumentUpload = await MongoWraper.FindIDOne(
       req.params._id,
       collection,
-      db
+      db,
     ).catch((err) => {
       return null;
     });
@@ -1209,7 +1907,7 @@ const fileUpload = (params) => async (req, res, next) => {
       db,
       collection,
       req.params._id,
-      BodyParsed
+      BodyParsed,
     );
 
     //   [propertyNameFile]: {
@@ -1225,7 +1923,7 @@ const fileUpload = (params) => async (req, res, next) => {
       req.params._id,
       docTopush,
       collection,
-      db
+      db,
     ).catch((err) => {
       const objResp = {
         status: "error",
@@ -1238,7 +1936,7 @@ const fileUpload = (params) => async (req, res, next) => {
     const FinalObject = await MongoWraper.FindIDOne(
       req.params._id,
       collection,
-      db
+      db,
     ).catch((err) => {
       return null;
     });
@@ -1276,7 +1974,7 @@ const DoctObjBuilder = (
   db,
   collection,
   id,
-  bodyParsed
+  bodyParsed,
 ) => {
   const dirDestino = `${PathBaseFile}/${db}/${collection}/${id}/`;
 
@@ -1368,7 +2066,7 @@ const uploadAdd = (params) => async (req, res, next) => {
     const docSubcontratista = await MongoWraper.FindIDOne(
       req.params._id,
       collection,
-      db
+      db,
     ).catch((err) => {
       return null;
     });
@@ -1419,7 +2117,7 @@ const uploadAdd = (params) => async (req, res, next) => {
         req.params._id,
         docTopush,
         collection,
-        db
+        db,
       ).catch((err) => {
         const objResp = {
           status: "error",
@@ -1432,7 +2130,7 @@ const uploadAdd = (params) => async (req, res, next) => {
       docSubcontratista2 = await MongoWraper.FindIDOne(
         req.params._id,
         collection,
-        db
+        db,
       ).catch((err) => {
         return null;
       });
@@ -1484,7 +2182,7 @@ const uploadPatch = (params) => async (req, res, next) => {
     const docSubcontratista = await MongoWraper.FindIDOne(
       req.params._id,
       collection,
-      db
+      db,
     ).catch((err) => {
       return null;
     });
@@ -1511,7 +2209,7 @@ const uploadPatch = (params) => async (req, res, next) => {
       /// si existen registros en ese array
       const body = JSON.parse(req.body.data);
       const existeAlguno = docSubcontratista.documentos.filter((carga) =>
-        carga.filename === body.filename ? carga : null
+        carga.filename === body.filename ? carga : null,
       );
       if (existeAlguno) {
         // // moviendo archivo de temporal a la carpeta trabajador     ############################################
@@ -1529,7 +2227,7 @@ const uploadPatch = (params) => async (req, res, next) => {
         body.file = `${URL}/${collection}/${req.params._id}/${req.files.file[0].filename}`;
         body.filepath = pathDestino;
         const cargas = docSubcontratista.documentos.map((carga) =>
-          carga.filename === body.filename ? body : carga
+          carga.filename === body.filename ? body : carga,
         );
         docSubcontratista.documentos = cargas;
 
@@ -1538,7 +2236,7 @@ const uploadPatch = (params) => async (req, res, next) => {
           req.params._id,
           docSubcontratista,
           collection,
-          db
+          db,
         ).catch((err) => {
           const objResp = {
             status: "error",
@@ -1595,7 +2293,7 @@ const uploadRemove = (params) => async (req, res, next) => {
     const docSubcontratista = await MongoWraper.FindIDOne(
       req.params._id,
       collection,
-      db
+      db,
     ).catch((err) => {
       return null;
     });
@@ -1619,7 +2317,7 @@ const uploadRemove = (params) => async (req, res, next) => {
       req.params._id,
       docSubcontratista,
       collection,
-      db
+      db,
     ).catch((err) => {
       const objResp = {
         status: "error",
@@ -1649,42 +2347,6 @@ const uploadRemove = (params) => async (req, res, next) => {
   }
 };
 
-const distinct = (params) =>
-  async function (req, res, next) {
-    params = params ? params : {};
-    const { Database, Collection, DistinctQuery, Middleware } = params;
-    const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-    const db = Database ? Database : req.database;
-
-    console.log(collection);
-    console.log(db);
-    try {
-      const dbResponse = await MongoWraper.Distinct(
-        DistinctQuery,
-        collection,
-        db
-      );
-      console.log(dbResponse);
-      const objResp = {
-        status: "ok",
-        message: "completed",
-        data: dbResponse == null ? {} : dbResponse,
-      };
-      if (Middleware) {
-        req.MidResponse = objResp;
-        return next();
-      }
-      res.status(200).send(objResp);
-    } catch (err) {
-      const objResp = {
-        status: "error",
-        message: "db error",
-        data: err,
-      };
-      res.status(500).send(objResp);
-    }
-  };
-
 const QueryGenericComparisonGenerator = (req, operator) => {
   const QueriesBuilder = Object.keys(req.query)
     .filter((e) => e.includes("_i" + operator + "i"))
@@ -1695,7 +2357,7 @@ const QueryGenericComparisonGenerator = (req, operator) => {
       };
     });
   return QueriesBuilder.map((e) =>
-    GetGenericComparisonQuery(e, "$" + operator)
+    GetGenericComparisonQuery(e, "$" + operator),
   );
 };
 
@@ -1731,7 +2393,7 @@ const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
     Query,
     ItemsToRemove,
     collection,
-    db
+    db,
   );
   const objResp = {
     status: "ok",
@@ -1743,758 +2405,6 @@ const pullIdFromArrayManagementDB = (params) => async (req, res, next) => {
     return next();
   }
   res.status(200).send(objResp);
-};
-
-const listFilter = (params) => async (req, res, next) => {
-  params = params ? params : {};
-  const { Database, Collection, Middleware } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-  //   const db = req.database;
-  /// CON paginado infinito
-
-  if (req.method == "POST") {
-    req.query = req.body;
-  }
-  const page = parseInt(req.query.page) || 0;
-  const limit = parseInt(req.query.limit);
-  console.log("path-------------------------");
-  console.log(req.originalUrl);
-
-  //   const collection = req.originalUrl.match(re)[0];
-  console.log("collection-------------------------");
-  console.log(collection);
-  // seccion para solo traer los comps requeridos por el usuario
-  var ProjectMongo = {};
-  if (req.query.hasOwnProperty("projectMongo")) {
-    if (Array.isArray(req.query.projectMongo)) {
-      ProjectMongo = req.query.projectMongo.reduce((acum, e) => {
-        return { ...acum, [e]: true };
-      }, {});
-    } else {
-      ProjectMongo = { [req.query.projectMongo]: true };
-    }
-  }
-  // seccion para concatenado
-
-  const ConcatName = Object.keys(req.query)
-    .filter((e) => e.includes("_concat"))
-    .reduce((acum, e) => e.replace("_concat", ""), "");
-  console.log(`nombre concatenado ${ConcatName}`);
-  var ConcatMongo = null;
-  if (ConcatName) {
-    ConcatMongo = JSON.parse(req.query[ConcatName + "_concat"]);
-  }
-  //Seccion para ordenar todo segun lo requiera el usuario
-  var SortMongoAsc = {};
-  if (req.query.hasOwnProperty("sortMongoAsc")) {
-    if (Array.isArray(req.query.sortMongoAsc)) {
-      SortMongoAsc = req.query.sortMongoAsc.reduce((acum, e) => {
-        return { ...acum, [e]: 1 };
-      }, {});
-    } else {
-      SortMongoAsc = { [req.query.sortMongoAsc]: 1 };
-    }
-  }
-  var SortMongoDec = {};
-  if (req.query.hasOwnProperty("sortMongoDec")) {
-    if (Array.isArray(req.query.sortMongoDec)) {
-      SortMongoDec = req.query.sortMongoDec.reduce((acum, e) => {
-        return { ...acum, [e]: -1 };
-      }, {});
-    } else {
-      SortMongoDec = { [req.query.sortMongoDec]: -1 };
-    }
-  }
-  var SortMongo = {};
-  if (
-    req.query.hasOwnProperty("sortMongoDec") ||
-    req.query.hasOwnProperty("sortMongoAsc")
-  ) {
-    SortMongo = { ...SortMongoAsc, ...SortMongoDec };
-  }
-  console.log("Ordenamiento");
-  console.log(SortMongo);
-
-  const NeidQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_neid"))
-    .map((e) => {
-      return { Property: e.replace("ne", ""), Search: req.query[e] };
-    });
-
-  const NeidMongoQueries = NeidQueriesBuilder.map((e) =>
-    GetGenericQueryNeid(e)
-  );
-
-  const NestringQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_nestring"))
-    .map((e) => {
-      return { Property: e.replace("_nestring", ""), Search: req.query[e] };
-    });
-
-  const NestringMongoQueries = NestringQueriesBuilder.map((e) =>
-    GetGenericQueryNestring(e)
-  );
-
-  const StringQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_string"))
-    .map((e) => {
-      return { Property: e.replace("_string", ""), Search: req.query[e] };
-    });
-
-  const StringtMongoQueries = StringQueriesBuilder.map((e) =>
-    GetGenericQueryString(e)
-  );
-
-  //after string
-  const StringAfterQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_afterString"))
-    .map((e) => {
-      return { Property: e.replace("_afterString", ""), Search: req.query[e] };
-    });
-
-  const StringAftertMongoQueries = StringAfterQueriesBuilder.map((e) =>
-    GetGenericQueryString(e)
-  );
-
-  const IntegerQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_integer"))
-    .map((e) => {
-      return {
-        Property: e.replace("_integer", ""),
-        Search: parseInt(req.query[e]),
-      };
-    });
-
-  const IntegerMongoQueries = IntegerQueriesBuilder.map((e) =>
-    GetGenericQueryString(e)
-  );
-
-  const IdQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_id"))
-    .map((e) => {
-      return { Property: e, Search: req.query[e] };
-    });
-
-  const IdMongoQueries = IdQueriesBuilder.map((e) => GetGenericQueryId(e));
-
-  const BoolQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_boolean"))
-    .map((e) => {
-      return {
-        Property: e.replace("_boolean", ""),
-        Search: req.query[e],
-      };
-    });
-
-  const BoolMongoQueries = BoolQueriesBuilder.map((e) =>
-    GetGenericQueryBool(e)
-  );
-
-  // [{"$or":[{"proyectos_id":"61a795d36444930053e0c56d"},{"proyectos_id":"61a804ea67caea3647707d6b"}]}]
-  // console.log(JSON.stringify(IdMongoQueries));
-
-  const PartialQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_partial"))
-    .map((e) => {
-      return { Property: e.replace("_partial", ""), Search: req.query[e] };
-    });
-
-  const PartialMongoQueries = {
-    $or: PartialQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
-  };
-
-  //
-  const PartialAfterQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_afterPartial"))
-    .map((e) => {
-      return { Property: e.replace("_afterPartial", ""), Search: req.query[e] };
-    });
-
-  const PartialAfterMongoQueries = {
-    $or: PartialAfterQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
-  };
-  // {"$or":[{"$and":[{"empresa":{"$regex":"Pab","$options":"si"}},{"empresa":{"$regex":"li","$options":"si"}}]},{"$and":[{"ciudad":{"$regex":"ag","$options":"si"}}]}]}
-
-  // const LookUpBuilder to check if its necesary to populate
-  var LookUpBuilder = [];
-  if (req.query.hasOwnProperty("lookup")) {
-    if (Array.isArray(req.query.lookup)) {
-      LookUpBuilder = req.query.lookup.map((e) => {
-        return {
-          $lookup: {
-            from: e,
-            localField: e + "_id",
-            foreignField: "_id",
-            as: e,
-          },
-        };
-      });
-    } else {
-      LookUpBuilder = [
-        {
-          $lookup: {
-            from: req.query.lookup,
-            localField: req.query.lookup + "_id",
-            foreignField: "_id",
-            as: req.query.lookup,
-          },
-        },
-      ];
-    }
-  }
-  console.log(LookUpBuilder);
-
-  const PropertyDateFilter = req.query.hasOwnProperty("propertydatefilter")
-    ? req.query.propertydatefilter
-    : "datetime";
-  const QueryDate =
-    req.query.hasOwnProperty("initialDate") &&
-    req.query.hasOwnProperty("finalDate")
-      ? [
-          {
-            [PropertyDateFilter]: {
-              $gte: new Date(req.query.initialDate),
-              $lt: new Date(req.query.finalDate),
-            },
-          },
-        ]
-      : [];
-
-  const exampleQuerie = {
-    $match: {
-      ...(req.query.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted),
-      ...(req.query.hasOwnProperty("showoculta") ? {} : Oculta),
-      // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
-      ...(IdMongoQueries.length > 0 ||
-      PartialQueriesBuilder.length > 0 ||
-      BoolMongoQueries.length > 0 ||
-      NeidMongoQueries.length > 0 ||
-      NestringMongoQueries.length > 0 ||
-      StringtMongoQueries.length > 0 ||
-      IntegerMongoQueries.length > 0 ||
-      QueryDate.length > 0
-        ? {
-            $and: [
-              ...StringtMongoQueries,
-              ...IntegerMongoQueries,
-              ...BoolMongoQueries,
-              ...IdMongoQueries,
-              ...NeidMongoQueries,
-              ...NestringMongoQueries,
-              ...(PartialQueriesBuilder.length > 0
-                ? [PartialMongoQueries]
-                : []),
-              ...QueryDate,
-            ],
-          }
-        : {}),
-    },
-  };
-  const exampleQuerieAfter = {
-    $match: {
-      // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
-      ...(PartialAfterQueriesBuilder.length > 0 ||
-      StringAftertMongoQueries.length > 0
-        ? {
-            $and: [
-              ...StringAftertMongoQueries,
-              ...(PartialAfterQueriesBuilder.length > 0
-                ? [PartialAfterMongoQueries]
-                : []),
-            ],
-          }
-        : {}),
-    },
-  };
-  // console.log(JSON.stringify(exampleQuerie, null, 4));
-
-  // $project: { "name" : { $concat : [ "$firstName", " ", "$lastName" ] } },
-  const AggregationMongo = [
-    ...(ConcatMongo
-      ? [{ $addFields: { [ConcatName]: { $concat: ConcatMongo } } }]
-      : []),
-    exampleQuerie,
-    ...LookUpBuilder,
-    exampleQuerieAfter,
-    ...(Object.keys(ProjectMongo).length > 0
-      ? [{ $project: ProjectMongo }]
-      : []),
-    { $sort: Object.keys(SortMongo).length > 0 ? SortMongo : { _id: -1 } },
-    ...(limit > 0
-      ? [
-          {
-            $facet: {
-              Total: [{ $count: "Total" }],
-              Results: [
-                { $skip: page > 0 ? page * limit : 0 },
-                { $limit: limit },
-              ],
-              Metadata: [
-                { $count: "Total" },
-                {
-                  $addFields: {
-                    Page: page,
-                    Limit: limit,
-                  },
-                },
-                {
-                  $addFields: {
-                    // div: {
-                    //   $divide: ["$Total", page == 0 ? limit * 1 : limit * page],
-                    // },
-                    Hasmore: {
-                      $gt: [
-                        {
-                          $divide: ["$Total", limit * (page + 1)],
-                        },
-                        1,
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        ]
-      : []),
-    // ...(limit > 0 ? [{ $unwind: { path: "$Metadata" } }] : []),
-  ];
-  console.log(JSON.stringify(AggregationMongo, null, 4));
-
-  try {
-    console.log(page);
-    console.log(limit);
-    console.log(collection);
-
-    const dbResponse = await MongoWraper.AggregationMongo(
-      AggregationMongo,
-      collection,
-      db
-    );
-    console.log(dbResponse);
-    const objResp = {
-      status: "ok",
-      message: "completed",
-      // data: dbResponse,
-      data:
-        limit > 0
-          ? {
-              ...dbResponse[0],
-              Total:
-                dbResponse[0].Total.length > 0
-                  ? dbResponse[0].Total[0].Total
-                  : 0,
-              Metadata:
-                dbResponse[0].Total.length > 0
-                  ? dbResponse[0].Metadata[0]
-                  : { Hasmore: false, Limit: limit, Page: page },
-            }
-          : dbResponse,
-    };
-    if (Middleware) {
-      req.MidResponse = objResp;
-      return next();
-    }
-    res.status(200).send(objResp);
-  } catch (err) {
-    console.log(err);
-    const objResp = {
-      status: "error",
-      message: "db error",
-      data: err,
-    };
-    res.status(500).send(objResp);
-  }
-};
-
-const listFilter2 = (params) => async (req, res, next) => {
-  params = params ? params : {};
-  const { Database, Collection, Middleware } = params;
-  const collection = Collection ? Collection : req.originalUrl.match(re)[0];
-  const db = Database ? Database : req.database;
-  //   const db = req.database;
-  if (req.method == "POST") {
-    req.query = req.body;
-  }
-  /// CON paginado infinito
-  const page = parseInt(req.query.page) || 0;
-  const limit = parseInt(req.query.limit);
-  console.log("path-------------------------");
-  console.log(req.originalUrl);
-
-  //   const collection = req.originalUrl.match(re)[0];
-  console.log("collection-------------------------");
-  console.log(collection);
-  // seccion para solo traer los comps requeridos por el usuario
-  var ProjectMongo = {};
-  if (req.query.hasOwnProperty("projectMongo")) {
-    if (Array.isArray(req.query.projectMongo)) {
-      ProjectMongo = req.query.projectMongo.reduce((acum, e) => {
-        return { ...acum, [e]: true };
-      }, {});
-    } else {
-      ProjectMongo = { [req.query.projectMongo]: true };
-    }
-  }
-  // seccion para concatenado
-
-  const ConcatName = Object.keys(req.query)
-    .filter((e) => e.includes("_concat"))
-    .reduce((acum, e) => e.replace("_concat", ""), "");
-  console.log(`nombre concatenado ${ConcatName}`);
-  var ConcatMongo = null;
-  if (ConcatName) {
-    ConcatMongo = JSON.parse(req.query[ConcatName + "_concat"]);
-  }
-  //Seccion para ordenar todo segun lo requiera el usuario
-  var SortMongoAsc = {};
-  if (req.query.hasOwnProperty("sortMongoAsc")) {
-    if (Array.isArray(req.query.sortMongoAsc)) {
-      SortMongoAsc = req.query.sortMongoAsc.reduce((acum, e) => {
-        return { ...acum, [e]: 1 };
-      }, {});
-    } else {
-      SortMongoAsc = { [req.query.sortMongoAsc]: 1 };
-    }
-  }
-  var SortMongoDec = {};
-  if (req.query.hasOwnProperty("sortMongoDec")) {
-    if (Array.isArray(req.query.sortMongoDec)) {
-      SortMongoDec = req.query.sortMongoDec.reduce((acum, e) => {
-        return { ...acum, [e]: -1 };
-      }, {});
-    } else {
-      SortMongoDec = { [req.query.sortMongoDec]: -1 };
-    }
-  }
-  var SortMongo = {};
-  if (
-    req.query.hasOwnProperty("sortMongoDec") ||
-    req.query.hasOwnProperty("sortMongoAsc")
-  ) {
-    SortMongo = { ...SortMongoAsc, ...SortMongoDec };
-  }
-  console.log("Ordenamiento");
-  console.log(SortMongo);
-
-  const NeidQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_neid"))
-    .map((e) => {
-      return { Property: e.replace("ne", ""), Search: req.query[e] };
-    });
-
-  const NeidMongoQueries = NeidQueriesBuilder.map((e) =>
-    GetGenericQueryNeid(e)
-  );
-
-  const NestringQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_nestring"))
-    .map((e) => {
-      return { Property: e.replace("_nestring", ""), Search: req.query[e] };
-    });
-
-  const NestringMongoQueries = NestringQueriesBuilder.map((e) =>
-    GetGenericQueryNestring(e)
-  );
-
-  const StringQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_string"))
-    .map((e) => {
-      return { Property: e.replace("_string", ""), Search: req.query[e] };
-    });
-
-  const StringtMongoQueries = StringQueriesBuilder.map((e) =>
-    GetGenericQueryString(e)
-  );
-
-  //after string
-  const StringAfterQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_afterString"))
-    .map((e) => {
-      return { Property: e.replace("_afterString", ""), Search: req.query[e] };
-    });
-
-  const StringAftertMongoQueries = StringAfterQueriesBuilder.map((e) =>
-    GetGenericQueryString(e)
-  );
-
-  const IntegerQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_integer"))
-    .map((e) => {
-      return {
-        Property: e.replace("_integer", ""),
-        Search: parseInt(req.query[e]),
-      };
-    });
-
-  const IntegerMongoQueries = IntegerQueriesBuilder.map((e) =>
-    GetGenericQueryString(e)
-  );
-
-  const GTMongoQueries = QueryGenericComparisonGenerator(req, "gt");
-  const GTEMongoQueries = QueryGenericComparisonGenerator(req, "gte");
-  const LTMongoQueries = QueryGenericComparisonGenerator(req, "lt");
-  const LTEMongoQueries = QueryGenericComparisonGenerator(req, "lte");
-
-  const GTDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "gt");
-  const GTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "gte");
-  const LTDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "lt");
-  // console.log(LTDateMongoQueries[0])
-  const LTEDateMongoQueries = QueryGenericComparisonGeneratorDate(req, "lte");
-
-  const IdQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_id"))
-    .map((e) => {
-      return { Property: e, Search: req.query[e] };
-    });
-
-  const IdMongoQueries = IdQueriesBuilder.map((e) => GetGenericQueryId(e));
-
-  const BoolQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_boolean"))
-    .map((e) => {
-      return {
-        Property: e.replace("_boolean", ""),
-        Search: req.query[e],
-      };
-    });
-
-  const BoolMongoQueries = BoolQueriesBuilder.map((e) =>
-    GetGenericQueryBool(e)
-  );
-
-  // [{"$or":[{"proyectos_id":"61a795d36444930053e0c56d"},{"proyectos_id":"61a804ea67caea3647707d6b"}]}]
-  // console.log(JSON.stringify(IdMongoQueries));
-
-  const PartialQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_partial"))
-    .map((e) => {
-      return { Property: e.replace("_partial", ""), Search: req.query[e] };
-    });
-
-  const PartialMongoQueries = {
-    $or: PartialQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
-  };
-
-  //
-  const PartialAfterQueriesBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_afterPartial"))
-    .map((e) => {
-      return { Property: e.replace("_afterPartial", ""), Search: req.query[e] };
-    });
-
-  const PartialAfterMongoQueries = {
-    $or: PartialAfterQueriesBuilder.map((e) => GetGenericQueryPartial(e)),
-  };
-  // {"$or":[{"$and":[{"empresa":{"$regex":"Pab","$options":"si"}},{"empresa":{"$regex":"li","$options":"si"}}]},{"$and":[{"ciudad":{"$regex":"ag","$options":"si"}}]}]}
-  //esta es la diferencia del list filter 1
-  const LookUpBuilder = Object.keys(req.query)
-    .filter((e) => e.includes("_lookup"))
-    .reduce((acum, e) => {
-      if (Array.isArray(req.query[e])) {
-        const ArrLookup = req.query[e].map((property) => {
-          return {
-            $lookup: {
-              from: e.replace("_lookup", ""),
-              localField: property,
-              foreignField: "_id",
-              as: e.replace("_lookup", "") + property,
-            },
-          };
-        });
-        return [...acum, ...ArrLookup];
-      }
-      return [
-        ...acum,
-        {
-          $lookup: {
-            from: e.replace("_lookup", ""),
-            localField: req.query[e],
-            foreignField: "_id",
-            as: e.replace("_lookup", "") + req.query[e],
-          },
-        },
-      ];
-    }, []);
-
-  const PropertyDateFilter = req.query.hasOwnProperty("propertydatefilter")
-    ? req.query.propertydatefilter
-    : "datetime";
-  const QueryDate =
-    req.query.hasOwnProperty("initialDate") &&
-    req.query.hasOwnProperty("finalDate")
-      ? [
-          {
-            [PropertyDateFilter]: {
-              $gte: new Date(req.query.initialDate),
-              $lt: new Date(req.query.finalDate),
-            },
-          },
-        ]
-      : [];
-
-  const exampleQuerie = {
-    $match: {
-      ...(req.query.hasOwnProperty("showdeleted") ? {} : operatorNotDeleted),
-      ...(req.query.hasOwnProperty("showoculta") ? {} : Oculta),
-      // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
-      ...(IdMongoQueries.length > 0 ||
-      PartialQueriesBuilder.length > 0 ||
-      BoolMongoQueries.length > 0 ||
-      NeidMongoQueries.length > 0 ||
-      NestringMongoQueries.length > 0 ||
-      StringtMongoQueries.length > 0 ||
-      IntegerMongoQueries.length > 0 ||
-      GTDateMongoQueries.length > 0 ||
-      GTEDateMongoQueries.length > 0 ||
-      LTDateMongoQueries.length > 0 ||
-      LTEDateMongoQueries.length > 0 ||
-      GTMongoQueries.length > 0 ||
-      GTEMongoQueries.length > 0 ||
-      LTMongoQueries.length > 0 ||
-      LTEMongoQueries.length > 0 ||
-      QueryDate.length > 0
-        ? {
-            $and: [
-              ...StringtMongoQueries,
-              ...IntegerMongoQueries,
-              ...GTMongoQueries,
-              ...GTEMongoQueries,
-              ...LTMongoQueries,
-              ...LTEMongoQueries,
-              ...LTDateMongoQueries,
-              ...LTEDateMongoQueries,
-              ...GTDateMongoQueries,
-              ...GTEDateMongoQueries,
-              ...BoolMongoQueries,
-              ...IdMongoQueries,
-              ...NeidMongoQueries,
-              ...NestringMongoQueries,
-              ...(PartialQueriesBuilder.length > 0
-                ? [PartialMongoQueries]
-                : []),
-              ...QueryDate,
-            ],
-          }
-        : {}),
-    },
-  };
-  const exampleQuerieAfter = {
-    $match: {
-      // ...(NeidMongoQueries.length > 0 && { $and: NeidMongoQueries }),
-      ...(PartialAfterQueriesBuilder.length > 0 ||
-      StringAftertMongoQueries.length > 0
-        ? {
-            $and: [
-              ...StringAftertMongoQueries,
-              ...(PartialAfterQueriesBuilder.length > 0
-                ? [PartialAfterMongoQueries]
-                : []),
-            ],
-          }
-        : {}),
-    },
-  };
-  // console.log(JSON.stringify(exampleQuerie, null, 4));
-
-  // $project: { "name" : { $concat : [ "$firstName", " ", "$lastName" ] } },
-  const AggregationMongo = [
-    ...(ConcatMongo
-      ? [{ $addFields: { [ConcatName]: { $concat: ConcatMongo } } }]
-      : []),
-    exampleQuerie,
-    ...LookUpBuilder,
-    exampleQuerieAfter,
-    ...(Object.keys(ProjectMongo).length > 0
-      ? [{ $project: ProjectMongo }]
-      : []),
-    { $sort: Object.keys(SortMongo).length > 0 ? SortMongo : { _id: -1 } },
-    ...(limit > 0
-      ? [
-          {
-            $facet: {
-              Total: [{ $count: "Total" }],
-              Results: [
-                { $skip: page > 0 ? page * limit : 0 },
-                { $limit: limit },
-              ],
-              Metadata: [
-                { $count: "Total" },
-                {
-                  $addFields: {
-                    Page: page,
-                    Limit: limit,
-                  },
-                },
-                {
-                  $addFields: {
-                    // div: {
-                    //   $divide: ["$Total", page == 0 ? limit * 1 : limit * page],
-                    // },
-                    Hasmore: {
-                      $gt: [
-                        {
-                          $divide: ["$Total", limit * (page + 1)],
-                        },
-                        1,
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        ]
-      : []),
-    // ...(limit > 0 ? [{ $unwind: { path: "$Metadata" } }] : []),
-  ];
-  console.log(JSON.stringify(AggregationMongo, null, 4));
-
-  try {
-    console.log(page);
-    console.log(limit);
-    console.log(collection);
-
-    const dbResponse = await MongoWraper.AggregationMongo(
-      AggregationMongo,
-      collection,
-      db
-    );
-    console.log(dbResponse);
-    const objResp = {
-      status: "ok",
-      message: "completed",
-      // data: dbResponse,
-      data:
-        limit > 0
-          ? {
-              ...dbResponse[0],
-              Total:
-                dbResponse[0].Total.length > 0
-                  ? dbResponse[0].Total[0].Total
-                  : 0,
-              Metadata:
-                dbResponse[0].Total.length > 0
-                  ? dbResponse[0].Metadata[0]
-                  : { Hasmore: false, Limit: limit, Page: page },
-            }
-          : dbResponse,
-    };
-    if (Middleware) {
-      req.MidResponse = objResp;
-      return next();
-    }
-    res.status(200).send(objResp);
-  } catch (err) {
-    console.log(err);
-    const objResp = {
-      status: "error",
-      message: "db error",
-      data: err,
-    };
-    res.status(500).send(objResp);
-  }
 };
 
 module.exports = (mongoWraperEasyClient) => {
