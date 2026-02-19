@@ -1,7 +1,7 @@
 const util = require("util");
 const path = require("path");
 const multer = require("multer");
-const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const maxSize = 50 * 1024 * 1024;
 
 let storage = multer.diskStorage({
@@ -13,7 +13,7 @@ let storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     // naming file
-    const nameFile = uuidv4() + path.extname(file.originalname);
+    const nameFile = crypto.randomUUID() + path.extname(file.originalname);
     cb(null, nameFile);
   },
 });

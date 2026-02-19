@@ -1,6 +1,6 @@
 {
   "name": "apibuildingframeworkexpress",
-  "version": "1.0.40",
+  "version": "1.0.41",
   "description": "Fast api building over Express.js",
   "main": "index.js",
   "scripts": {
@@ -61,7 +61,6 @@
     "mongoclienteasywrapper": "^1.2.7",
     "mongodb": "^4.17.2",
     "multer": "^2.0.2",
-    "uuid": "^13.0.0",
     "yup": "^1.7.1"
   }
 }

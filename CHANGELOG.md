@@ -18,6 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.41] – 2025-02-19
+
+### Changed
+
+- Replaced `uuid` package with native `crypto.randomUUID()` for file naming in uploadFileData.js
+
+### Removed
+
+- Removed `uuid` dependency from package.json
+
+### Fixed
+
+- Fixed ERR_REQUIRE_ESM error caused by uuid v13 being ES Module only
+
+---
+
 ## [1.0.40] – 2025-02-17
 
 ### Added
